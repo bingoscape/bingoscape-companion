@@ -17,16 +17,24 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.task.Schedule;
+import net.runelite.client.ui.DrawManager;
 
 import java.time.temporal.ChronoUnit;
 import java.awt.image.BufferedImage;
+import java.awt.Image;
+import java.awt.Graphics;
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
+import javax.imageio.ImageIO;
 
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.RequestBody;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.bingoscape.models.*;
@@ -35,6 +43,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.UUID;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Consumer;
 
 @Slf4j
 @PluginDescriptor(
@@ -55,12 +65,21 @@ public class BingoScapePlugin extends Plugin {
     @Inject
     private OkHttpClient httpClient;
 
+    @Inject
+    private DrawManager drawManager;
+
+    @Inject
+    private ScheduledExecutorService executor;
+
     private NavigationButton navButton;
     private BingoScapePanel panel;
     private final Gson gson = new GsonBuilder().create();
     private List<EventData> activeEvents = new ArrayList<>();
     private EventData currentEvent;
     private Bingo currentBingo;
+
+    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+    private static final MediaType FORM_DATA = MediaType.parse("multipart/form-data");
 
     @Override
     protected void startUp() throws Exception {
@@ -149,7 +168,7 @@ public class BingoScapePlugin extends Plugin {
     }
 
     public void setEventDetails(EventData eventData) {
-        //currentEvent = eventDetail.getEvent();
+        currentEvent = eventData;
         panel.updateEventDetails(eventData);
 
         if (eventData.getBingos() != null && !eventData.getBingos().isEmpty()) {
@@ -163,23 +182,140 @@ public class BingoScapePlugin extends Plugin {
         panel.displayBingoBoard(currentBingo);
     }
 
-    public void submitTileCompletion(UUID tileId, String proofImageUrl, String description) {
+    public void submitTileCompletion(UUID tileId, String proofImageUrl, String description, boolean takeScreenshot) {
         if (config.apiKey() == null || config.apiKey().isEmpty()) {
             return;
         }
 
+        if (takeScreenshot) {
+            takeScreenshot(tileId, proofImageUrl, description);
+        } else {
+            submitTileCompletionToServer(tileId, proofImageUrl, description, null);
+        }
+    }
+
+    private void takeScreenshot(UUID tileId, String proofImageUrl, String description) {
+        Consumer<Image> imageCallback = (img) -> {
+            executor.submit(() -> {
+                try {
+                    processScreenshot(tileId, proofImageUrl, description, img);
+                } catch (IOException e) {
+                    log.error("Failed to process screenshot", e);
+                    client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to take screenshot for submission.", null);
+                }
+            });
+        };
+
+        drawManager.requestNextFrameListener(imageCallback);
+    }
+
+    private void processScreenshot(UUID tileId, String proofImageUrl, String description, Image image) throws IOException {
+        BufferedImage screenshot = new BufferedImage(image.getWidth(null), image.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+        Graphics graphics = screenshot.getGraphics();
+        graphics.drawImage(image, 0, 0, null);
+        graphics.dispose();
+
+        ByteArrayOutputStream screenshotOutput = new ByteArrayOutputStream();
+        ImageIO.write(screenshot, "png", screenshotOutput);
+        byte[] screenshotBytes = screenshotOutput.toByteArray();
+
+        submitTileCompletionWithScreenshot(tileId, proofImageUrl, description, screenshotBytes);
+    }
+
+    private void submitTileCompletionWithScreenshot(UUID tileId, String proofImageUrl, String description, byte[] screenshotBytes) {
         String apiUrl = config.apiBaseUrl() + "/api/runelite/tiles/" + tileId + "/submissions";
 
-        // Implementation for submission would go here
-        // This would use OkHttp to POST the submission data
+        MultipartBody.Builder multipartBuilder = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM);
 
-        // After successful submission:
-        client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Tile submission sent to BingoScape!", null);
-
-        // Refresh the current bingo board
-        if (currentEvent != null) {
-            setEventDetails(currentEvent);
+        if (screenshotBytes != null) {
+            multipartBuilder.addFormDataPart("image", "screenshot.png",
+                    RequestBody.create(MediaType.parse("image/png"), screenshotBytes));
         }
+
+        RequestBody requestBody = multipartBuilder.build();
+
+        Request request = new Request.Builder()
+                .url(apiUrl)
+                .header("Authorization", String.format("Bearer %s", config.apiKey()))
+                .post(requestBody)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                log.error("Failed to submit tile completion", e);
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    log.error("Unsuccessful submission response: " + response);
+                    client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null);
+                    return;
+                }
+
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Tile submission sent to BingoScape!", null);
+
+                // Refresh the current bingo board
+                if (currentEvent != null) {
+                    setEventDetails(currentEvent);
+                }
+            }
+        });
+    }
+
+    private void submitTileCompletionToServer(UUID tileId, String proofImageUrl, String description, String base64Screenshot) {
+        String apiUrl = config.apiBaseUrl() + "/api/runelite/tiles/" + tileId + "/submissions";
+
+        // Create JSON payload for non-screenshot submissions
+        RequestBody body;
+        if (base64Screenshot == null) {
+            MultipartBody.Builder multipartBuilder = new MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("description", description);
+
+            if (proofImageUrl != null && !proofImageUrl.isEmpty()) {
+                multipartBuilder.addFormDataPart("proofUrl", proofImageUrl);
+            }
+
+            body = multipartBuilder.build();
+        } else {
+            // This branch is kept for backward compatibility but not used anymore
+            // as we now use the multipart approach for screenshots
+            body = RequestBody.create(JSON, "{\"description\":\"" + description + "\",\"proofUrl\":\"" + proofImageUrl + "\",\"screenshot\":\"" + base64Screenshot + "\"}");
+        }
+
+        Request request = new Request.Builder()
+                .url(apiUrl)
+                .header("Authorization", String.format("Bearer %s", config.apiKey()))
+                .post(body)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                log.error("Failed to submit tile completion", e);
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    log.error("Unsuccessful submission response: " + response);
+                    client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null);
+                    return;
+                }
+
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Tile submission sent to BingoScape!", null);
+
+                // Refresh the current bingo board
+                if (currentEvent != null) {
+                    setEventDetails(currentEvent);
+                }
+            }
+        });
     }
 
     @Provides
