@@ -116,7 +116,7 @@ public class BingoScapePlugin extends Plugin {
         }
     }
 
-    @Schedule(period = 5, unit = ChronoUnit.MINUTES)
+    @Schedule(period = 2, unit = ChronoUnit.MINUTES)
     public void scheduledRefresh() {
         if (client.getGameState() == GameState.LOGGED_IN && config.apiKey() != null && !config.apiKey().isEmpty()) {
             fetchActiveEvents();

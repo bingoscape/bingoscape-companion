@@ -44,9 +44,8 @@ public class BingoBoardWindow extends JFrame {
 
         contentPanel.add(titleLabel, BorderLayout.NORTH);
 
-        // Create bingo board with dynamic grid size
+        // Create bingo board that will resize with the window
         bingoBoard = new JPanel();
-        updateGridLayout(bingo);
         bingoBoard.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         bingoBoard.setBorder(new EmptyBorder(5, 5, 5, 5));
 
@@ -56,10 +55,19 @@ public class BingoBoardWindow extends JFrame {
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
         contentPanel.add(scrollPane, BorderLayout.CENTER);
-
         setContentPane(contentPanel);
 
+        // Add a component listener to resize the grid when the window is resized
+        addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                updateGridLayout(bingo);
+                displayBingoBoard(bingo);
+            }
+        });
+
         // Display the bingo board
+        updateGridLayout(bingo);
         displayBingoBoard(bingo);
     }
 
@@ -71,6 +79,7 @@ public class BingoBoardWindow extends JFrame {
         if (rows <= 0) rows = 5;
         if (cols <= 0) cols = 5;
 
+        // Use GridLayout with some spacing between cells
         bingoBoard.setLayout(new GridLayout(rows, cols, 4, 4));
     }
 
@@ -108,8 +117,19 @@ public class BingoBoardWindow extends JFrame {
         });
     }
 
+    // Update createTilePanel to use a uniform aspect ratio
     private JPanel createTilePanel(Tile tile) {
-        JPanel panel = new JPanel();
+        // Create a panel that will maintain a square aspect ratio
+        JPanel panel = new JPanel() {
+            @Override
+            public Dimension getPreferredSize() {
+                // Make sure tiles stay square
+                Dimension size = super.getPreferredSize();
+                int minSize = Math.min(size.width, size.height);
+                return new Dimension(minSize, minSize);
+            }
+        };
+
         panel.setLayout(new BorderLayout());
         panel.setBackground(getTileBackgroundColor(tile));
         panel.setBorder(new CompoundBorder(
@@ -118,11 +138,16 @@ public class BingoBoardWindow extends JFrame {
         ));
 
         // Add tooltip with title and weight
-        panel.setToolTipText("<html><b>" + tile.getTitle() + "</b><br>XP: " + tile.getWeight() +
-                (tile.getDescription() != null ? "<br>" + tile.getDescription() : "") + "</html>");
+        panel.setToolTipText(tile.getTitle() + " (Weight: " + tile.getWeight() + ")");
+
         // Add image if available
         if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
             loadTileImage(panel, tile.getHeaderImage());
+        } else {
+            // If no image, show the tile title
+            JLabel titleLabel = new JLabel("<html><center>" + tile.getTitle() + "</center></html>", SwingConstants.CENTER);
+            titleLabel.setForeground(Color.WHITE);
+            panel.add(titleLabel, BorderLayout.CENTER);
         }
 
         // Add click listener for submission
@@ -151,23 +176,63 @@ public class BingoBoardWindow extends JFrame {
         return ColorScheme.DARK_GRAY_COLOR;
     }
 
+    // Update loadTileImage to create properly sized images
     private void loadTileImage(JPanel panel, String imageUrl) {
         executor.submit(() -> {
             try {
                 URL url = new URL(imageUrl);
-                BufferedImage image = ImageIO.read(url);
+                BufferedImage originalImage = ImageIO.read(url);
 
-                if (image != null) {
-                    // Resize image to fit panel
-                    BufferedImage resized = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
-                    Graphics2D g = resized.createGraphics();
-                    g.drawImage(image, 0, 0, 32, 32, null);
-                    g.dispose();
+                if (originalImage != null) {
+                    // Create a custom JLabel that will maintain aspect ratio
+                    JLabel imageLabel = new JLabel() {
+                        @Override
+                        protected void paintComponent(Graphics g) {
+                            super.paintComponent(g);
+                            if (getIcon() != null) {
+                                Image img = ((ImageIcon) getIcon()).getImage();
+                                if (img != null) {
+                                    // Calculate dimensions that preserve aspect ratio
+                                    int width = getWidth();
+                                    int height = getHeight();
 
-                    JLabel imageLabel = new JLabel(new ImageIcon(resized));
+                                    double imageRatio = (double) originalImage.getWidth() / originalImage.getHeight();
+                                    double panelRatio = (double) width / height;
+
+                                    int x = 0, y = 0;
+                                    int drawWidth, drawHeight;
+
+                                    if (imageRatio > panelRatio) {
+                                        // Image is wider than panel proportionally
+                                        drawWidth = width;
+                                        drawHeight = (int) (width / imageRatio);
+                                        y = (height - drawHeight) / 2; // Center vertically
+                                    } else {
+                                        // Image is taller than panel proportionally
+                                        drawHeight = height;
+                                        drawWidth = (int) (height * imageRatio);
+                                        x = (width - drawWidth) / 2; // Center horizontally
+                                    }
+
+                                    g.drawImage(img, x, y, drawWidth, drawHeight, this);
+                                }
+                            }
+                        }
+                    };
+
+                    imageLabel.setHorizontalAlignment(JLabel.CENTER);
+                    imageLabel.setVerticalAlignment(JLabel.CENTER);
+
+                    // Create initial scaled version
+                    int tileSize = Math.min(100, panel.getWidth());
+                    Image scaledImage = originalImage.getScaledInstance(tileSize, tileSize, Image.SCALE_SMOOTH);
+                    imageLabel.setIcon(new ImageIcon(scaledImage));
+
                     SwingUtilities.invokeLater(() -> {
+                        panel.setLayout(new BorderLayout());
                         panel.add(imageLabel, BorderLayout.CENTER);
                         panel.revalidate();
+                        panel.repaint();
                     });
                 }
             } catch (IOException e) {
