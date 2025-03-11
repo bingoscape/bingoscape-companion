@@ -26,6 +26,7 @@ import java.awt.Graphics;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import javax.imageio.ImageIO;
+import javax.swing.*;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -37,6 +38,7 @@ import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import org.bingoscape.apiclient.BingoScapeApiClient;
 import org.bingoscape.models.*;
 
 import java.util.Arrays;
@@ -77,12 +79,14 @@ public class BingoScapePlugin extends Plugin {
     private List<EventData> activeEvents = new ArrayList<>();
     private EventData currentEvent;
     private Bingo currentBingo;
+    private BingoScapeApiClient bingoScapeApiClient;
 
-    private static final MediaType FORM_DATA = MediaType.parse("multipart/form-data");
+    private boolean isLoggedIn;
 
     @Override
     protected void startUp() throws Exception {
         panel = new BingoScapePanel(this);
+        bingoScapeApiClient = new BingoScapeApiClient(this.httpClient, config);
 
         final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/sidepanel_icon.png");
 
@@ -110,9 +114,12 @@ public class BingoScapePlugin extends Plugin {
     @Subscribe
     public void onGameStateChanged(GameStateChanged gameStateChanged) {
         if (gameStateChanged.getGameState() == GameState.LOGGED_IN) {
+            isLoggedIn = true;
             if (config.apiKey() != null && !config.apiKey().isEmpty()) {
                 fetchActiveEvents();
             }
+        } else {
+            isLoggedIn = false;
         }
     }
 
@@ -130,6 +137,15 @@ public class BingoScapePlugin extends Plugin {
         config.apiKey(apiKey);
         fetchActiveEvents();
     }
+
+    public BingoTileResponse fetchBingoTileStatus(UUID bingoId) {
+        try {
+            return this.bingoScapeApiClient.getBingoTiles(bingoId);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
 
     public void fetchActiveEvents() {
         if (config.apiKey() == null || config.apiKey().isEmpty()) {
@@ -182,7 +198,27 @@ public class BingoScapePlugin extends Plugin {
     }
 
     public void submitTileCompletion(UUID tileId) {
+        if (!isLoggedIn) {
+            SwingUtilities.invokeLater(() -> {
+                JOptionPane.showMessageDialog(
+                        panel,
+                        "You must be logged into RuneScape to submit a tile completion.",
+                        "Not Logged In",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            });
+            return;
+        }
+
         if (config.apiKey() == null || config.apiKey().isEmpty()) {
+            SwingUtilities.invokeLater(() -> {
+                JOptionPane.showMessageDialog(
+                        panel,
+                        "API key is missing. Please set your API key in the plugin settings.",
+                        "Missing API Key",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            });
             return;
         }
 

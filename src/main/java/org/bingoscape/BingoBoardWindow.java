@@ -3,7 +3,9 @@ package org.bingoscape;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import org.bingoscape.models.Bingo;
+import org.bingoscape.models.BingoTileResponse;
 import org.bingoscape.models.Tile;
+import org.bingoscape.models.TileStatus;
 
 import javax.swing.*;
 import javax.swing.border.CompoundBorder;
@@ -20,6 +22,7 @@ import javax.imageio.ImageIO;
 public class BingoBoardWindow extends JFrame {
     private final BingoScapePlugin plugin;
     private final JPanel bingoBoard;
+    private JLabel titleLabel;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
     private Bingo currentBingo;
 
@@ -29,6 +32,7 @@ public class BingoBoardWindow extends JFrame {
 
         setTitle("BingoScape - " + bingo.getTitle());
         setSize(600, 600);
+        setResizable(false);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
@@ -36,7 +40,7 @@ public class BingoBoardWindow extends JFrame {
         contentPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
         contentPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-        JLabel titleLabel = new JLabel(bingo.getTitle());
+        titleLabel = new JLabel(bingo.getTitle());
         titleLabel.setFont(FontManager.getRunescapeBoldFont());
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
@@ -56,15 +60,6 @@ public class BingoBoardWindow extends JFrame {
 
         contentPanel.add(scrollPane, BorderLayout.CENTER);
         setContentPane(contentPanel);
-
-        // Add a component listener to resize the grid when the window is resized
-        addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override
-            public void componentResized(java.awt.event.ComponentEvent e) {
-                updateGridLayout(bingo);
-                displayBingoBoard(bingo);
-            }
-        });
 
         // Display the bingo board
         updateGridLayout(bingo);
@@ -87,6 +82,7 @@ public class BingoBoardWindow extends JFrame {
         this.currentBingo = bingo;
         SwingUtilities.invokeLater(() -> {
             setTitle("BingoScape - " + bingo.getTitle());
+            titleLabel.setText(bingo.getTitle()); // Update the title label
             updateGridLayout(bingo);
             displayBingoBoard(bingo);
         });
@@ -100,6 +96,7 @@ public class BingoBoardWindow extends JFrame {
                 return;
             }
 
+
             // Sort tiles by position
             bingo.getTiles().sort((a, b) -> {
                 int aPos = a.getIndex();
@@ -107,8 +104,10 @@ public class BingoBoardWindow extends JFrame {
                 return Integer.compare(aPos, bPos);
             });
 
+
+            BingoTileResponse bingoTileResponse = this.plugin.fetchBingoTileStatus(bingo.getId());
             for (Tile tile : bingo.getTiles()) {
-                JPanel tilePanel = createTilePanel(tile);
+                JPanel tilePanel = createTilePanel(tile, bingoTileResponse != null ? bingoTileResponse.getTiles().getOrDefault(tile.getId(), null) : null);
                 bingoBoard.add(tilePanel);
             }
 
@@ -118,27 +117,31 @@ public class BingoBoardWindow extends JFrame {
     }
 
     // Update createTilePanel to use a uniform aspect ratio
-    private JPanel createTilePanel(Tile tile) {
-        // Create a panel that will maintain a square aspect ratio
-        JPanel panel = new JPanel() {
-            @Override
-            public Dimension getPreferredSize() {
-                // Make sure tiles stay square
-                Dimension size = super.getPreferredSize();
-                int minSize = Math.min(size.width, size.height);
-                return new Dimension(minSize, minSize);
-            }
-        };
+    private JPanel createTilePanel(Tile tile, TileStatus status) {
 
+        // Calculate fixed tile size based on board dimensions
+        int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
+        int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
+
+        // Calculate available space accounting for borders and padding
+        int availableWidth = 600 - 40; // Window width minus padding/borders
+        int availableHeight = 600 - 100; // Window height minus title/padding/borders
+
+        // Calculate tile size (square)
+        int tileSize = Math.min(availableWidth / cols, availableHeight / rows) - 10; // Subtract spacing
+
+        JPanel panel = new JPanel();
         panel.setLayout(new BorderLayout());
+        panel.setPreferredSize(new Dimension(tileSize, tileSize));
+        panel.setMinimumSize(new Dimension(tileSize, tileSize));
+        panel.setMaximumSize(new Dimension(tileSize, tileSize));
         panel.setBackground(getTileBackgroundColor(tile));
         panel.setBorder(new CompoundBorder(
-                new LineBorder(ColorScheme.DARK_GRAY_COLOR, 1),
+                new LineBorder(getTileBorderColor(status), 1),
                 new EmptyBorder(4, 4, 4, 4)
         ));
-
         // Add tooltip with title and weight
-        panel.setToolTipText(tile.getTitle() + " (Weight: " + tile.getWeight() + ")");
+        panel.setToolTipText(tile.getTitle() + " (XP: " + tile.getWeight() + ")");
 
         // Add image if available
         if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
@@ -171,12 +174,27 @@ public class BingoBoardWindow extends JFrame {
         return panel;
     }
 
+    private Color getTileBorderColor(TileStatus status) {
+        if (status == null || status.getStatus() == null)
+            return ColorScheme.BORDER_COLOR;
+        switch (status.getStatus()) {
+            case PENDING:
+                return new Color(59, 130, 246);
+            case ACCEPTED:
+                return new Color(34, 197, 94);
+            case REQUIRES_INTERACTION:
+                return new Color(234, 179, 8);
+            case DECLINED:
+                return new Color(239, 68, 68);
+        }
+        return ColorScheme.BORDER_COLOR;
+    }
+
     private Color getTileBackgroundColor(Tile tile) {
         // TODO: API Call for submission state?
         return ColorScheme.DARK_GRAY_COLOR;
     }
 
-    // Update loadTileImage to create properly sized images
     private void loadTileImage(JPanel panel, String imageUrl) {
         executor.submit(() -> {
             try {
@@ -184,48 +202,27 @@ public class BingoBoardWindow extends JFrame {
                 BufferedImage originalImage = ImageIO.read(url);
 
                 if (originalImage != null) {
-                    // Create a custom JLabel that will maintain aspect ratio
-                    JLabel imageLabel = new JLabel() {
-                        @Override
-                        protected void paintComponent(Graphics g) {
-                            super.paintComponent(g);
-                            if (getIcon() != null) {
-                                Image img = ((ImageIcon) getIcon()).getImage();
-                                if (img != null) {
-                                    // Calculate dimensions that preserve aspect ratio
-                                    int width = getWidth();
-                                    int height = getHeight();
+                    // Calculate the fixed tile size based on board dimensions
+                    int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
+                    int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
 
-                                    double imageRatio = (double) originalImage.getWidth() / originalImage.getHeight();
-                                    double panelRatio = (double) width / height;
+                    // Calculate available space accounting for borders and padding
+                    int availableWidth = 600 - 40; // Window width minus padding/borders
+                    int availableHeight = 600 - 100; // Window height minus title/padding/borders
 
-                                    int x = 0, y = 0;
-                                    int drawWidth, drawHeight;
+                    // Calculate tile size (square)
+                    int tileSize = Math.min(availableWidth / cols, availableHeight / rows) - 10; // Subtract spacing
 
-                                    if (imageRatio > panelRatio) {
-                                        // Image is wider than panel proportionally
-                                        drawWidth = width;
-                                        drawHeight = (int) (width / imageRatio);
-                                        y = (height - drawHeight) / 2; // Center vertically
-                                    } else {
-                                        // Image is taller than panel proportionally
-                                        drawHeight = height;
-                                        drawWidth = (int) (height * imageRatio);
-                                        x = (width - drawWidth) / 2; // Center horizontally
-                                    }
-
-                                    g.drawImage(img, x, y, drawWidth, drawHeight, this);
-                                }
-                            }
-                        }
-                    };
-
+                    // Create a fixed-size panel for the image
+                    JLabel imageLabel = new JLabel();
+                    imageLabel.setPreferredSize(new Dimension(tileSize, tileSize));
+                    imageLabel.setMinimumSize(new Dimension(tileSize, tileSize));
+                    imageLabel.setMaximumSize(new Dimension(tileSize, tileSize));
                     imageLabel.setHorizontalAlignment(JLabel.CENTER);
                     imageLabel.setVerticalAlignment(JLabel.CENTER);
 
-                    // Create initial scaled version
-                    int tileSize = Math.min(100, panel.getWidth());
-                    Image scaledImage = originalImage.getScaledInstance(tileSize, tileSize, Image.SCALE_SMOOTH);
+                    // Scale the image to fit within the tile while maintaining aspect ratio
+                    Image scaledImage = getScaledImage(originalImage, tileSize, tileSize);
                     imageLabel.setIcon(new ImageIcon(scaledImage));
 
                     SwingUtilities.invokeLater(() -> {
@@ -241,31 +238,76 @@ public class BingoBoardWindow extends JFrame {
         });
     }
 
+    // Helper method to scale images while maintaining aspect ratio
+    private Image getScaledImage(BufferedImage img, int targetWidth, int targetHeight) {
+        // Calculate dimensions that preserve aspect ratio
+        double imgRatio = (double) img.getWidth() / img.getHeight();
+
+        int scaledWidth, scaledHeight;
+        if (imgRatio > 1) {
+            // Image is wider than tall
+            scaledWidth = Math.min(targetWidth, img.getWidth());
+            scaledHeight = (int) (scaledWidth / imgRatio);
+        } else {
+            // Image is taller than wide
+            scaledHeight = Math.min(targetHeight, img.getHeight());
+            scaledWidth = (int) (scaledHeight * imgRatio);
+        }
+
+        // Create a new BufferedImage for drawing
+        BufferedImage scaledImg = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = scaledImg.createGraphics();
+
+        // Set rendering hints for better quality
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        // Fill with transparent background
+        g2d.setComposite(AlphaComposite.Clear);
+        g2d.fillRect(0, 0, targetWidth, targetHeight);
+        g2d.setComposite(AlphaComposite.SrcOver);
+
+        // Calculate position to center the image
+        int x = (targetWidth - scaledWidth) / 2;
+        int y = (targetHeight - scaledHeight) / 2;
+
+        // Draw the scaled image centered
+        g2d.drawImage(img, x, y, scaledWidth, scaledHeight, null);
+        g2d.dispose();
+
+        return scaledImg;
+    }
+
     private void showSubmissionDialog(Tile tile) {
         JDialog dialog = new JDialog(this, "Tile Details", true);
-        dialog.setLayout(new BorderLayout());
-        dialog.setSize(400, 300);
+        dialog.setSize(450, 250);
         dialog.setLocationRelativeTo(this);
+        dialog.setLayout(new BorderLayout());
 
-        // Main content panel
-        JPanel contentPanel = new JPanel();
-        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
-        contentPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
-        contentPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        // Create a split panel with info on left, image on right
+        JPanel mainPanel = new JPanel(new BorderLayout(10, 0));
+        mainPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
+        mainPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        // Tile title (bold and larger)
+        // Left side: Info panel
+        JPanel infoPanel = new JPanel();
+        infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
+        infoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+
+        // Title
         JLabel titleLabel = new JLabel("<html><h2>" + tile.getTitle() + "</h2></html>");
         titleLabel.setFont(FontManager.getRunescapeBoldFont());
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Tile weight
-        JLabel weightLabel = new JLabel("Weight: " + tile.getWeight());
-        weightLabel.setForeground(Color.LIGHT_GRAY);
-        weightLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        weightLabel.setBorder(new EmptyBorder(5, 0, 10, 0));
+        // XP (formerly weight)
+        JLabel xpLabel = new JLabel("XP: " + tile.getWeight());
+        xpLabel.setForeground(Color.LIGHT_GRAY);
+        xpLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        xpLabel.setBorder(new EmptyBorder(5, 0, 10, 0));
 
-        // Tile description
+        // Description
         JTextArea descriptionArea = new JTextArea(tile.getDescription());
         descriptionArea.setWrapStyleWord(true);
         descriptionArea.setLineWrap(true);
@@ -273,20 +315,53 @@ public class BingoBoardWindow extends JFrame {
         descriptionArea.setForeground(Color.WHITE);
         descriptionArea.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         descriptionArea.setAlignmentX(Component.LEFT_ALIGNMENT);
-        descriptionArea.setBorder(new EmptyBorder(0, 0, 15, 0));
 
-        // Button panel
-        JPanel buttonPanel = new JPanel();
-        buttonPanel.setLayout(new FlowLayout(FlowLayout.RIGHT));
+        infoPanel.add(titleLabel);
+        infoPanel.add(xpLabel);
+        infoPanel.add(descriptionArea);
+
+        // Right side: Image panel
+        JPanel imagePanel = new JPanel(new BorderLayout());
+        imagePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        imagePanel.setPreferredSize(new Dimension(150, 150));
+
+        if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
+            JLabel imageLabel = new JLabel();
+            imageLabel.setHorizontalAlignment(JLabel.CENTER);
+            imageLabel.setVerticalAlignment(JLabel.CENTER);
+
+            // Load the image asynchronously
+            executor.submit(() -> {
+                try {
+                    URL url = new URL(tile.getHeaderImage());
+                    BufferedImage originalImage = ImageIO.read(url);
+                    if (originalImage != null) {
+                        Image scaledImage = getScaledImage(originalImage, 150, 150);
+                        SwingUtilities.invokeLater(() -> {
+                            imageLabel.setIcon(new ImageIcon(scaledImage));
+                            imagePanel.revalidate();
+                        });
+                    }
+                } catch (IOException e) {
+                    // Silently fail on image load error
+                }
+            });
+
+            imagePanel.add(imageLabel, BorderLayout.CENTER);
+        }
+
+        mainPanel.add(infoPanel, BorderLayout.CENTER);
+        mainPanel.add(imagePanel, BorderLayout.EAST);
+
+        // Button panel at the bottom
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
         JButton cancelButton = new JButton("Cancel");
-        JButton submitButton = new JButton("Submit Completion");
+        JButton submitButton = new JButton("Take & Submit Screenshot");
 
         cancelButton.addActionListener(e -> dialog.dispose());
-
         submitButton.addActionListener(e -> {
-            // Always take screenshot, no additional data
             plugin.submitTileCompletion(tile.getId());
             dialog.dispose();
         });
@@ -294,15 +369,8 @@ public class BingoBoardWindow extends JFrame {
         buttonPanel.add(cancelButton);
         buttonPanel.add(submitButton);
 
-        // Add everything to the content panel
-        contentPanel.add(titleLabel);
-        contentPanel.add(weightLabel);
-        contentPanel.add(descriptionArea);
-
-        // Add content and button panels to dialog
-        dialog.add(contentPanel, BorderLayout.CENTER);
+        dialog.add(mainPanel, BorderLayout.CENTER);
         dialog.add(buttonPanel, BorderLayout.SOUTH);
-
         dialog.setVisible(true);
     }
 }
