@@ -36,16 +36,6 @@ public interface BingoScapeConfig extends Config
     }
 
     @ConfigItem(
-            keyName = "refreshRate",
-            name = "Refresh Rate (minutes)",
-            description = "How often to refresh bingo data"
-    )
-    default int refreshRate()
-    {
-        return 5;
-    }
-
-    @ConfigItem(
             keyName = "showNotifications",
             name = "Show Notifications",
             description = "Show notifications for bingo updates"
