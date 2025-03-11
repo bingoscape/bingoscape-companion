@@ -78,7 +78,6 @@ public class BingoScapePlugin extends Plugin {
     private EventData currentEvent;
     private Bingo currentBingo;
 
-    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private static final MediaType FORM_DATA = MediaType.parse("multipart/form-data");
 
     @Override
@@ -182,23 +181,19 @@ public class BingoScapePlugin extends Plugin {
         panel.displayBingoBoard(currentBingo);
     }
 
-    public void submitTileCompletion(UUID tileId, String proofImageUrl, String description, boolean takeScreenshot) {
+    public void submitTileCompletion(UUID tileId) {
         if (config.apiKey() == null || config.apiKey().isEmpty()) {
             return;
         }
 
-        if (takeScreenshot) {
-            takeScreenshot(tileId, proofImageUrl, description);
-        } else {
-            submitTileCompletionToServer(tileId, proofImageUrl, description, null);
-        }
+        takeScreenshot(tileId);
     }
 
-    private void takeScreenshot(UUID tileId, String proofImageUrl, String description) {
+    private void takeScreenshot(UUID tileId) {
         Consumer<Image> imageCallback = (img) -> {
             executor.submit(() -> {
                 try {
-                    processScreenshot(tileId, proofImageUrl, description, img);
+                    processScreenshot(tileId, img);
                 } catch (IOException e) {
                     log.error("Failed to process screenshot", e);
                     client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to take screenshot for submission.", null);
@@ -209,7 +204,7 @@ public class BingoScapePlugin extends Plugin {
         drawManager.requestNextFrameListener(imageCallback);
     }
 
-    private void processScreenshot(UUID tileId, String proofImageUrl, String description, Image image) throws IOException {
+    private void processScreenshot(UUID tileId, Image image) throws IOException {
         BufferedImage screenshot = new BufferedImage(image.getWidth(null), image.getHeight(null), BufferedImage.TYPE_INT_ARGB);
         Graphics graphics = screenshot.getGraphics();
         graphics.drawImage(image, 0, 0, null);
@@ -219,10 +214,10 @@ public class BingoScapePlugin extends Plugin {
         ImageIO.write(screenshot, "png", screenshotOutput);
         byte[] screenshotBytes = screenshotOutput.toByteArray();
 
-        submitTileCompletionWithScreenshot(tileId, proofImageUrl, description, screenshotBytes);
+        submitTileCompletionWithScreenshot(tileId, screenshotBytes);
     }
 
-    private void submitTileCompletionWithScreenshot(UUID tileId, String proofImageUrl, String description, byte[] screenshotBytes) {
+    private void submitTileCompletionWithScreenshot(UUID tileId, byte[] screenshotBytes) {
         String apiUrl = config.apiBaseUrl() + "/api/runelite/tiles/" + tileId + "/submissions";
 
         MultipartBody.Builder multipartBuilder = new MultipartBody.Builder()
@@ -239,58 +234,6 @@ public class BingoScapePlugin extends Plugin {
                 .url(apiUrl)
                 .header("Authorization", String.format("Bearer %s", config.apiKey()))
                 .post(requestBody)
-                .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                log.error("Failed to submit tile completion", e);
-                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null);
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                if (!response.isSuccessful()) {
-                    log.error("Unsuccessful submission response: " + response);
-                    client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null);
-                    return;
-                }
-
-                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Tile submission sent to BingoScape!", null);
-
-                // Refresh the current bingo board
-                if (currentEvent != null) {
-                    setEventDetails(currentEvent);
-                }
-            }
-        });
-    }
-
-    private void submitTileCompletionToServer(UUID tileId, String proofImageUrl, String description, String base64Screenshot) {
-        String apiUrl = config.apiBaseUrl() + "/api/runelite/tiles/" + tileId + "/submissions";
-
-        // Create JSON payload for non-screenshot submissions
-        RequestBody body;
-        if (base64Screenshot == null) {
-            MultipartBody.Builder multipartBuilder = new MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("description", description);
-
-            if (proofImageUrl != null && !proofImageUrl.isEmpty()) {
-                multipartBuilder.addFormDataPart("proofUrl", proofImageUrl);
-            }
-
-            body = multipartBuilder.build();
-        } else {
-            // This branch is kept for backward compatibility but not used anymore
-            // as we now use the multipart approach for screenshots
-            body = RequestBody.create(JSON, "{\"description\":\"" + description + "\",\"proofUrl\":\"" + proofImageUrl + "\",\"screenshot\":\"" + base64Screenshot + "\"}");
-        }
-
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .header("Authorization", String.format("Bearer %s", config.apiKey()))
-                .post(body)
                 .build();
 
         httpClient.newCall(request).enqueue(new Callback() {

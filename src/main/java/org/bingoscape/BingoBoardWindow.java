@@ -117,13 +117,9 @@ public class BingoBoardWindow extends JFrame {
                 new EmptyBorder(4, 4, 4, 4)
         ));
 
-        JLabel titleLabel = new JLabel("<html><body style='width: 100%'>" + tile.getTitle() + "</body></html>");
-        titleLabel.setForeground(Color.WHITE);
-        titleLabel.setFont(FontManager.getRunescapeSmallFont());
-        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
-
-        panel.add(titleLabel, BorderLayout.CENTER);
-
+        // Add tooltip with title and weight
+        panel.setToolTipText("<html><b>" + tile.getTitle() + "</b><br>XP: " + tile.getWeight() +
+                (tile.getDescription() != null ? "<br>" + tile.getDescription() : "") + "</html>");
         // Add image if available
         if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
             loadTileImage(panel, tile.getHeaderImage());
@@ -152,7 +148,7 @@ public class BingoBoardWindow extends JFrame {
 
     private Color getTileBackgroundColor(Tile tile) {
         // TODO: API Call for submission state?
-        return new Color(0, 128, 0); // Green for completed
+        return ColorScheme.DARK_GRAY_COLOR;
     }
 
     private void loadTileImage(JPanel panel, String imageUrl) {
@@ -170,7 +166,7 @@ public class BingoBoardWindow extends JFrame {
 
                     JLabel imageLabel = new JLabel(new ImageIcon(resized));
                     SwingUtilities.invokeLater(() -> {
-                        panel.add(imageLabel, BorderLayout.NORTH);
+                        panel.add(imageLabel, BorderLayout.CENTER);
                         panel.revalidate();
                     });
                 }
@@ -181,56 +177,67 @@ public class BingoBoardWindow extends JFrame {
     }
 
     private void showSubmissionDialog(Tile tile) {
-        JDialog dialog = new JDialog(this, "Submit Tile Completion", true);
+        JDialog dialog = new JDialog(this, "Tile Details", true);
         dialog.setLayout(new BorderLayout());
-        dialog.setSize(350, 300);
+        dialog.setSize(400, 300);
         dialog.setLocationRelativeTo(this);
 
+        // Main content panel
         JPanel contentPanel = new JPanel();
         contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
-        contentPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        contentPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
+        contentPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        JLabel titleLabel = new JLabel("Submit proof for: " + tile.getTitle());
-        JTextField proofUrlField = new JTextField();
-        JLabel urlLabel = new JLabel("Proof URL (optional):");
-        JTextArea descriptionArea = new JTextArea(3, 20);
-        JLabel descLabel = new JLabel("Description:");
+        // Tile title (bold and larger)
+        JLabel titleLabel = new JLabel("<html><h2>" + tile.getTitle() + "</h2></html>");
+        titleLabel.setFont(FontManager.getRunescapeBoldFont());
+        titleLabel.setForeground(Color.WHITE);
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Add screenshot option
-        JCheckBox screenshotCheckbox = new JCheckBox("Take screenshot as proof", true);
+        // Tile weight
+        JLabel weightLabel = new JLabel("Weight: " + tile.getWeight());
+        weightLabel.setForeground(Color.LIGHT_GRAY);
+        weightLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        weightLabel.setBorder(new EmptyBorder(5, 0, 10, 0));
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        // Tile description
+        JTextArea descriptionArea = new JTextArea(tile.getDescription());
+        descriptionArea.setWrapStyleWord(true);
+        descriptionArea.setLineWrap(true);
+        descriptionArea.setEditable(false);
+        descriptionArea.setForeground(Color.WHITE);
+        descriptionArea.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        descriptionArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+        descriptionArea.setBorder(new EmptyBorder(0, 0, 15, 0));
+
+        // Button panel
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
         JButton cancelButton = new JButton("Cancel");
-        JButton submitButton = new JButton("Submit");
+        JButton submitButton = new JButton("Submit Completion");
 
         cancelButton.addActionListener(e -> dialog.dispose());
 
         submitButton.addActionListener(e -> {
-            String proofUrl = proofUrlField.getText();
-            String description = descriptionArea.getText();
-            boolean takeScreenshot = screenshotCheckbox.isSelected();
-
-            plugin.submitTileCompletion(tile.getId(), proofUrl, description, takeScreenshot);
+            // Always take screenshot, no additional data
+            plugin.submitTileCompletion(tile.getId());
             dialog.dispose();
         });
 
         buttonPanel.add(cancelButton);
         buttonPanel.add(submitButton);
 
+        // Add everything to the content panel
         contentPanel.add(titleLabel);
-        contentPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        contentPanel.add(screenshotCheckbox);
-        contentPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        contentPanel.add(urlLabel);
-        contentPanel.add(proofUrlField);
-        contentPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        contentPanel.add(descLabel);
+        contentPanel.add(weightLabel);
         contentPanel.add(descriptionArea);
 
+        // Add content and button panels to dialog
         dialog.add(contentPanel, BorderLayout.CENTER);
         dialog.add(buttonPanel, BorderLayout.SOUTH);
 
         dialog.setVisible(true);
     }
 }
-
