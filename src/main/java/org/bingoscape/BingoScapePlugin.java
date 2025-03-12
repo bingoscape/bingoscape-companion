@@ -9,6 +9,7 @@ import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
@@ -57,6 +58,9 @@ import java.util.function.Consumer;
 public class BingoScapePlugin extends Plugin {
     @Inject
     private Client client;
+
+    @Inject
+    private ClientThread clientThread;
 
     @Inject
     private BingoScapeConfig config;
@@ -188,7 +192,9 @@ public class BingoScapePlugin extends Plugin {
 
         if (eventData.getBingos() != null && !eventData.getBingos().isEmpty()) {
             // Default to first bingo
-            selectBingo(eventData.getBingos().get(0));
+            selectBingo(currentBingo == null ?
+                    eventData.getBingos().get(0)
+                    : currentBingo);
         }
     }
 
@@ -197,42 +203,25 @@ public class BingoScapePlugin extends Plugin {
         panel.displayBingoBoard(currentBingo);
     }
 
-    public void submitTileCompletion(UUID tileId) {
-        if (!isLoggedIn) {
-            SwingUtilities.invokeLater(() -> {
-                JOptionPane.showMessageDialog(
-                        panel,
-                        "You must be logged into RuneScape to submit a tile completion.",
-                        "Not Logged In",
-                        JOptionPane.ERROR_MESSAGE
-                );
-            });
-            return;
-        }
 
-        if (config.apiKey() == null || config.apiKey().isEmpty()) {
-            SwingUtilities.invokeLater(() -> {
-                JOptionPane.showMessageDialog(
-                        panel,
-                        "API key is missing. Please set your API key in the plugin settings.",
-                        "Missing API Key",
-                        JOptionPane.ERROR_MESSAGE
-                );
-            });
-            return;
-        }
-
-        takeScreenshot(tileId);
-    }
-
-    private void takeScreenshot(UUID tileId) {
+    public void takeScreenshot(UUID tileId, Consumer<byte[]> callback) {
         Consumer<Image> imageCallback = (img) -> {
             executor.submit(() -> {
                 try {
-                    processScreenshot(tileId, img);
+                    BufferedImage screenshot = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+                    Graphics graphics = screenshot.getGraphics();
+                    graphics.drawImage(img, 0, 0, null);
+                    graphics.dispose();
+
+                    ByteArrayOutputStream screenshotOutput = new ByteArrayOutputStream();
+                    ImageIO.write(screenshot, "png", screenshotOutput);
+                    byte[] screenshotBytes = screenshotOutput.toByteArray();
+
+                    callback.accept(screenshotBytes);
                 } catch (IOException e) {
                     log.error("Failed to process screenshot", e);
-                    client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to take screenshot for submission.", null);
+                    clientThread.invokeLater(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to take screenshot for submission.", null));
+                    callback.accept(null);
                 }
             });
         };
@@ -240,20 +229,31 @@ public class BingoScapePlugin extends Plugin {
         drawManager.requestNextFrameListener(imageCallback);
     }
 
-    private void processScreenshot(UUID tileId, Image image) throws IOException {
-        BufferedImage screenshot = new BufferedImage(image.getWidth(null), image.getHeight(null), BufferedImage.TYPE_INT_ARGB);
-        Graphics graphics = screenshot.getGraphics();
-        graphics.drawImage(image, 0, 0, null);
-        graphics.dispose();
+    public void submitTileCompletionWithScreenshot(UUID tileId, byte[] screenshotBytes) {
+//        if (!isLoggedIn) {
+//            SwingUtilities.invokeLater(() -> {
+//                JOptionPane.showMessageDialog(
+//                        panel,
+//                        "You must be logged into RuneScape to submit a tile completion.",
+//                        "Not Logged In",
+//                        JOptionPane.ERROR_MESSAGE
+//                );
+//            });
+//            return;
+//        }
+//
+//        if (config.apiKey() == null || config.apiKey().isEmpty()) {
+//            SwingUtilities.invokeLater(() -> {
+//                JOptionPane.showMessageDialog(
+//                        panel,
+//                        "API key is missing. Please set your API key in the plugin settings.",
+//                        "Missing API Key",
+//                        JOptionPane.ERROR_MESSAGE
+//                );
+//            });
+//            return;
+//        }
 
-        ByteArrayOutputStream screenshotOutput = new ByteArrayOutputStream();
-        ImageIO.write(screenshot, "png", screenshotOutput);
-        byte[] screenshotBytes = screenshotOutput.toByteArray();
-
-        submitTileCompletionWithScreenshot(tileId, screenshotBytes);
-    }
-
-    private void submitTileCompletionWithScreenshot(UUID tileId, byte[] screenshotBytes) {
         String apiUrl = config.apiBaseUrl() + "/api/runelite/tiles/" + tileId + "/submissions";
 
         MultipartBody.Builder multipartBuilder = new MultipartBody.Builder()
@@ -276,23 +276,26 @@ public class BingoScapePlugin extends Plugin {
             @Override
             public void onFailure(Call call, IOException e) {
                 log.error("Failed to submit tile completion", e);
-                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null);
+                clientThread.invokeLater(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null));
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 if (!response.isSuccessful()) {
                     log.error("Unsuccessful submission response: " + response);
-                    client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null);
+                    clientThread.invokeLater(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null));
+                    response.close();
                     return;
                 }
 
-                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Tile submission sent to BingoScape!", null);
+                clientThread.invokeLater(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Tile submission sent to BingoScape!", null));
 
                 // Refresh the current bingo board
                 if (currentEvent != null) {
                     setEventDetails(currentEvent);
                 }
+
+                response.close();
             }
         });
     }
