@@ -15,40 +15,55 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.net.URL;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import javax.imageio.ImageIO;
 
 public class BingoBoardWindow extends JFrame {
+    private static final int WINDOW_WIDTH = 600;
+    private static final int WINDOW_HEIGHT = 600;
+    private static final int PADDING = 10;
+    private static final int SPACING = 4;
+    private static final int IMAGE_LOADING_THREADS = 4;
+
     private final BingoScapePlugin plugin;
     private final JPanel bingoBoard;
     private JLabel titleLabel;
-    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+    private final ExecutorService executor;
     private Bingo currentBingo;
+    private final Map<String, ImageIcon> imageCache = new ConcurrentHashMap<>();
 
     public BingoBoardWindow(BingoScapePlugin plugin, Bingo bingo) {
         this.plugin = plugin;
         this.currentBingo = bingo;
+        this.executor = Executors.newFixedThreadPool(IMAGE_LOADING_THREADS);
 
+        // Window setup
         setTitle("BingoScape - " + bingo.getTitle());
-        setSize(600, 600);
+        setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
         setResizable(false);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
+        // Main panel setup
         JPanel contentPanel = new JPanel(new BorderLayout());
-        contentPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        contentPanel.setBorder(new EmptyBorder(PADDING, PADDING, PADDING, PADDING));
         contentPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
+        // Title setup
         titleLabel = new JLabel(bingo.getTitle());
         titleLabel.setFont(FontManager.getRunescapeBoldFont());
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
-
+        titleLabel.setBorder(new EmptyBorder(0, 0, PADDING, 0));
         contentPanel.add(titleLabel, BorderLayout.NORTH);
 
-        // Create bingo board that will resize with the window
+        // Bingo board setup
         bingoBoard = new JPanel();
         bingoBoard.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         bingoBoard.setBorder(new EmptyBorder(5, 5, 5, 5));
@@ -67,94 +82,90 @@ public class BingoBoardWindow extends JFrame {
     }
 
     private void updateGridLayout(Bingo bingo) {
-        int rows = bingo.getRows();
-        int cols = bingo.getColumns();
-
-        // Default to 5x5 if not specified
-        if (rows <= 0) rows = 5;
-        if (cols <= 0) cols = 5;
-
-        // Use GridLayout with some spacing between cells
-        bingoBoard.setLayout(new GridLayout(rows, cols, 4, 4));
+        int rows = bingo.getRows() <= 0 ? 5 : bingo.getRows();
+        int cols = bingo.getColumns() <= 0 ? 5 : bingo.getColumns();
+        bingoBoard.setLayout(new GridLayout(rows, cols, SPACING, SPACING));
     }
 
     public void updateBingoBoard(Bingo bingo) {
         this.currentBingo = bingo;
         SwingUtilities.invokeLater(() -> {
             setTitle("BingoScape - " + bingo.getTitle());
-            titleLabel.setText(bingo.getTitle()); // Update the title label
+            titleLabel.setText(bingo.getTitle());
             updateGridLayout(bingo);
             displayBingoBoard(bingo);
         });
     }
 
     private void displayBingoBoard(Bingo bingo) {
-        SwingUtilities.invokeLater(() -> {
-            bingoBoard.removeAll();
-
-            if (bingo == null || bingo.getTiles() == null) {
-                return;
-            }
-
-
-            // Sort tiles by position
-            bingo.getTiles().sort((a, b) -> {
-                int aPos = a.getIndex();
-                int bPos = b.getIndex();
-                return Integer.compare(aPos, bPos);
-            });
-
-
+        // Fetch tile status in background thread to not block UI
+        executor.submit(() -> {
             BingoTileResponse bingoTileResponse = this.plugin.fetchBingoTileStatus(bingo.getId());
-            for (Tile tile : bingo.getTiles()) {
-                JPanel tilePanel = createTilePanel(tile, bingoTileResponse != null ? bingoTileResponse.getTiles().getOrDefault(tile.getId(), null) : null);
-                bingoBoard.add(tilePanel);
-            }
+            Map<UUID, TileStatus> tileStatuses = bingoTileResponse != null ? bingoTileResponse.getTiles() : null;
 
-            bingoBoard.revalidate();
-            bingoBoard.repaint();
+            SwingUtilities.invokeLater(() -> {
+                bingoBoard.removeAll();
+
+                if (bingo == null || bingo.getTiles() == null) {
+                    return;
+                }
+
+                // Sort tiles by position
+                bingo.getTiles().sort((a, b) -> Integer.compare(a.getIndex(), b.getIndex()));
+
+                // Create all tile panels at once
+                for (Tile tile : bingo.getTiles()) {
+                    TileStatus status = tileStatuses != null ? tileStatuses.get(tile.getId()) : null;
+                    JPanel tilePanel = createTilePanel(tile, status);
+                    bingoBoard.add(tilePanel);
+                }
+
+                bingoBoard.revalidate();
+                bingoBoard.repaint();
+            });
         });
     }
 
-    // Update createTilePanel to use a uniform aspect ratio
     private JPanel createTilePanel(Tile tile, TileStatus status) {
-
-        // Calculate fixed tile size based on board dimensions
+        // Calculate tile size based on board dimensions
         int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
         int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
+        int availableWidth = WINDOW_WIDTH - 40;
+        int availableHeight = WINDOW_HEIGHT - 100;
+        int tileSize = Math.min(availableWidth / cols, availableHeight / rows) - PADDING;
 
-        // Calculate available space accounting for borders and padding
-        int availableWidth = 600 - 40; // Window width minus padding/borders
-        int availableHeight = 600 - 100; // Window height minus title/padding/borders
-
-        // Calculate tile size (square)
-        int tileSize = Math.min(availableWidth / cols, availableHeight / rows) - 10; // Subtract spacing
-
-        JPanel panel = new JPanel();
-        panel.setLayout(new BorderLayout());
+        JPanel panel = new JPanel(new BorderLayout());
         panel.setPreferredSize(new Dimension(tileSize, tileSize));
         panel.setMinimumSize(new Dimension(tileSize, tileSize));
         panel.setMaximumSize(new Dimension(tileSize, tileSize));
-        panel.setBackground(getTileBackgroundColor(tile));
+        panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
         panel.setBorder(new CompoundBorder(
                 new LineBorder(getTileBorderColor(status), 1),
                 new EmptyBorder(4, 4, 4, 4)
         ));
+
         // Add tooltip with title and weight
         panel.setToolTipText(tile.getTitle() + " (XP: " + tile.getWeight() + ")");
 
-        // Add image if available
+        // Add image if available, otherwise show title
         if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
-            loadTileImage(panel, tile.getHeaderImage());
+            loadTileImage(panel, tile, tileSize);
         } else {
-            // If no image, show the tile title
             JLabel titleLabel = new JLabel("<html><center>" + tile.getTitle() + "</center></html>", SwingConstants.CENTER);
             titleLabel.setForeground(Color.WHITE);
             panel.add(titleLabel, BorderLayout.CENTER);
         }
 
-        // Add click listener for submission
+        // Add click behavior
+        addTilePanelListeners(panel, tile);
+
+        return panel;
+    }
+
+    private void addTilePanelListeners(JPanel panel, Tile tile) {
         panel.addMouseListener(new java.awt.event.MouseAdapter() {
+            private final Color originalColor = panel.getBackground();
+
             @Override
             public void mouseClicked(java.awt.event.MouseEvent evt) {
                 showSubmissionDialog(tile);
@@ -162,21 +173,20 @@ public class BingoBoardWindow extends JFrame {
 
             @Override
             public void mouseEntered(java.awt.event.MouseEvent evt) {
-                panel.setBackground(panel.getBackground().brighter());
+                panel.setBackground(originalColor.brighter());
             }
 
             @Override
             public void mouseExited(java.awt.event.MouseEvent evt) {
-                panel.setBackground(getTileBackgroundColor(tile));
+                panel.setBackground(originalColor);
             }
         });
-
-        return panel;
     }
 
     private Color getTileBorderColor(TileStatus status) {
         if (status == null || status.getStatus() == null)
             return ColorScheme.BORDER_COLOR;
+
         switch (status.getStatus()) {
             case PENDING:
                 return new Color(59, 130, 246);
@@ -186,59 +196,75 @@ public class BingoBoardWindow extends JFrame {
                 return new Color(234, 179, 8);
             case DECLINED:
                 return new Color(239, 68, 68);
+            default:
+                return ColorScheme.BORDER_COLOR;
         }
-        return ColorScheme.BORDER_COLOR;
     }
 
-    private Color getTileBackgroundColor(Tile tile) {
-        // TODO: API Call for submission state?
-        return ColorScheme.DARK_GRAY_COLOR;
-    }
+    private void loadTileImage(JPanel panel, Tile tile, int tileSize) {
+        String imageUrl = tile.getHeaderImage();
 
-    private void loadTileImage(JPanel panel, String imageUrl) {
+        // Create and add placeholder/loading label immediately
+        JLabel imageLabel = new JLabel("Loading...");
+        imageLabel.setHorizontalAlignment(JLabel.CENTER);
+        imageLabel.setVerticalAlignment(JLabel.CENTER);
+        imageLabel.setForeground(Color.LIGHT_GRAY);
+        panel.add(imageLabel, BorderLayout.CENTER);
+
+        // Check cache first (still do this async to not block UI)
         executor.submit(() -> {
+            if (imageCache.containsKey(imageUrl)) {
+                SwingUtilities.invokeLater(() -> {
+                    imageLabel.setText("");
+                    imageLabel.setIcon(imageCache.get(imageUrl));
+                    panel.revalidate();
+                });
+                return;
+            }
+
             try {
+                // Fetch the image
                 URL url = new URL(imageUrl);
                 BufferedImage originalImage = ImageIO.read(url);
 
                 if (originalImage != null) {
-                    // Calculate the fixed tile size based on board dimensions
-                    int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
-                    int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
+                    // Create a separate thread for the CPU-intensive scaling operation
+                    executor.submit(() -> {
+                        try {
+                            // Scale the image to fit (CPU intensive)
+                            Image scaledImage = getScaledImage(originalImage, tileSize, tileSize);
+                            ImageIcon icon = new ImageIcon(scaledImage);
 
-                    // Calculate available space accounting for borders and padding
-                    int availableWidth = 600 - 40; // Window width minus padding/borders
-                    int availableHeight = 600 - 100; // Window height minus title/padding/borders
+                            // Add to cache
+                            imageCache.put(imageUrl, icon);
 
-                    // Calculate tile size (square)
-                    int tileSize = Math.min(availableWidth / cols, availableHeight / rows) - 10; // Subtract spacing
-
-                    // Create a fixed-size panel for the image
-                    JLabel imageLabel = new JLabel();
-                    imageLabel.setPreferredSize(new Dimension(tileSize, tileSize));
-                    imageLabel.setMinimumSize(new Dimension(tileSize, tileSize));
-                    imageLabel.setMaximumSize(new Dimension(tileSize, tileSize));
-                    imageLabel.setHorizontalAlignment(JLabel.CENTER);
-                    imageLabel.setVerticalAlignment(JLabel.CENTER);
-
-                    // Scale the image to fit within the tile while maintaining aspect ratio
-                    Image scaledImage = getScaledImage(originalImage, tileSize, tileSize);
-                    imageLabel.setIcon(new ImageIcon(scaledImage));
-
-                    SwingUtilities.invokeLater(() -> {
-                        panel.setLayout(new BorderLayout());
-                        panel.add(imageLabel, BorderLayout.CENTER);
-                        panel.revalidate();
-                        panel.repaint();
+                            SwingUtilities.invokeLater(() -> {
+                                imageLabel.setText("");
+                                imageLabel.setIcon(icon);
+                                panel.revalidate();
+                            });
+                        } catch (Exception e) {
+                            handleImageLoadError(panel, imageLabel, tile);
+                        }
                     });
+                } else {
+                    handleImageLoadError(panel, imageLabel, tile);
                 }
             } catch (IOException e) {
-                // Silently fail on image load error
+                handleImageLoadError(panel, imageLabel, tile);
             }
         });
     }
 
-    // Helper method to scale images while maintaining aspect ratio
+    private void handleImageLoadError(JPanel panel, JLabel imageLabel, Tile tile) {
+        SwingUtilities.invokeLater(() -> {
+            imageLabel.setText(tile.getTitle());
+            imageLabel.setIcon(null);
+            imageLabel.setForeground(Color.WHITE);
+            panel.revalidate();
+        });
+    }
+
     private Image getScaledImage(BufferedImage img, int targetWidth, int targetHeight) {
         // Calculate dimensions that preserve aspect ratio
         double imgRatio = (double) img.getWidth() / img.getHeight();
@@ -285,6 +311,18 @@ public class BingoBoardWindow extends JFrame {
         dialog.setLocationRelativeTo(this);
         dialog.setLayout(new BorderLayout());
 
+        // Main panel - split into info and image
+        JPanel mainPanel = createTileDetailsPanel(tile);
+
+        // Button panel
+        JPanel buttonPanel = createDialogButtonPanel(dialog, tile);
+
+        dialog.add(mainPanel, BorderLayout.CENTER);
+        dialog.add(buttonPanel, BorderLayout.SOUTH);
+        dialog.setVisible(true);
+    }
+
+    private JPanel createTileDetailsPanel(Tile tile) {
         // Create a split panel with info on left, image on right
         JPanel mainPanel = new JPanel(new BorderLayout(10, 0));
         mainPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
@@ -321,39 +359,88 @@ public class BingoBoardWindow extends JFrame {
         infoPanel.add(descriptionArea);
 
         // Right side: Image panel
+        JPanel imagePanel = createTileImagePanel(tile);
+
+        mainPanel.add(infoPanel, BorderLayout.CENTER);
+        mainPanel.add(imagePanel, BorderLayout.EAST);
+
+        return mainPanel;
+    }
+
+    private JPanel createTileImagePanel(Tile tile) {
         JPanel imagePanel = new JPanel(new BorderLayout());
         imagePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         imagePanel.setPreferredSize(new Dimension(150, 150));
 
         if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
-            JLabel imageLabel = new JLabel();
+            // Create a label with loading state
+            JLabel imageLabel = new JLabel("Loading...");
             imageLabel.setHorizontalAlignment(JLabel.CENTER);
             imageLabel.setVerticalAlignment(JLabel.CENTER);
+            imageLabel.setForeground(Color.LIGHT_GRAY);
+            imagePanel.add(imageLabel, BorderLayout.CENTER);
 
-            // Load the image asynchronously
+            // Load image in background thread pool
             executor.submit(() -> {
+                String imageUrl = tile.getHeaderImage();
+
+                // Check cache first
+                if (imageCache.containsKey(imageUrl)) {
+                    SwingUtilities.invokeLater(() -> {
+                        imageLabel.setText("");
+                        imageLabel.setIcon(imageCache.get(imageUrl));
+                        imagePanel.revalidate();
+                    });
+                    return;
+                }
+
                 try {
-                    URL url = new URL(tile.getHeaderImage());
+                    // Fetch image in network thread
+                    URL url = new URL(imageUrl);
                     BufferedImage originalImage = ImageIO.read(url);
+
                     if (originalImage != null) {
-                        Image scaledImage = getScaledImage(originalImage, 150, 150);
+                        // Process image in separate thread
+                        executor.submit(() -> {
+                            try {
+                                // CPU-intensive scaling operation
+                                Image scaledImage = getScaledImage(originalImage, 150, 150);
+                                ImageIcon icon = new ImageIcon(scaledImage);
+
+                                // Add to cache
+                                imageCache.put(imageUrl, icon);
+
+                                SwingUtilities.invokeLater(() -> {
+                                    imageLabel.setText("");
+                                    imageLabel.setIcon(icon);
+                                    imagePanel.revalidate();
+                                });
+                            } catch (Exception e) {
+                                SwingUtilities.invokeLater(() -> {
+                                    imageLabel.setText(tile.getTitle());
+                                    imageLabel.setForeground(Color.WHITE);
+                                });
+                            }
+                        });
+                    } else {
                         SwingUtilities.invokeLater(() -> {
-                            imageLabel.setIcon(new ImageIcon(scaledImage));
-                            imagePanel.revalidate();
+                            imageLabel.setText(tile.getTitle());
+                            imageLabel.setForeground(Color.WHITE);
                         });
                     }
                 } catch (IOException e) {
-                    // Silently fail on image load error
+                    SwingUtilities.invokeLater(() -> {
+                        imageLabel.setText(tile.getTitle());
+                        imageLabel.setForeground(Color.WHITE);
+                    });
                 }
             });
-
-            imagePanel.add(imageLabel, BorderLayout.CENTER);
         }
 
-        mainPanel.add(infoPanel, BorderLayout.CENTER);
-        mainPanel.add(imagePanel, BorderLayout.EAST);
+        return imagePanel;
+    }
 
-        // Button panel at the bottom
+    private JPanel createDialogButtonPanel(JDialog dialog, Tile tile) {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
@@ -369,9 +456,7 @@ public class BingoBoardWindow extends JFrame {
         buttonPanel.add(cancelButton);
         buttonPanel.add(submitButton);
 
-        dialog.add(mainPanel, BorderLayout.CENTER);
-        dialog.add(buttonPanel, BorderLayout.SOUTH);
-        dialog.setVisible(true);
+        return buttonPanel;
     }
 
     private void takeScreenshotAndShowPreview(Tile tile) {
@@ -410,5 +495,13 @@ public class BingoBoardWindow extends JFrame {
 
         previewDialog.add(buttonPanel, BorderLayout.SOUTH);
         previewDialog.setVisible(true);
+    }
+
+    // Clean up resources when window is closed
+    @Override
+    public void dispose() {
+        executor.shutdown();
+        imageCache.clear();
+        super.dispose();
     }
 }
