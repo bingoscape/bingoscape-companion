@@ -35,6 +35,7 @@ public class BingoScapeApiClient {
             }
 
             String responseBody = response.body().string();
+            response.close();
             return gson.fromJson(responseBody, BingoTileResponse.class);
         }
     }

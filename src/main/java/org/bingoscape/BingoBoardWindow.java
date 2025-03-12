@@ -358,12 +358,12 @@ public class BingoBoardWindow extends JFrame {
         buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
         JButton cancelButton = new JButton("Cancel");
-        JButton submitButton = new JButton("Take & Submit Screenshot");
+        JButton submitButton = new JButton("Take & Review Screenshot");
 
         cancelButton.addActionListener(e -> dialog.dispose());
         submitButton.addActionListener(e -> {
-            plugin.submitTileCompletion(tile.getId());
             dialog.dispose();
+            takeScreenshotAndShowPreview(tile);
         });
 
         buttonPanel.add(cancelButton);
@@ -372,5 +372,43 @@ public class BingoBoardWindow extends JFrame {
         dialog.add(mainPanel, BorderLayout.CENTER);
         dialog.add(buttonPanel, BorderLayout.SOUTH);
         dialog.setVisible(true);
+    }
+
+    private void takeScreenshotAndShowPreview(Tile tile) {
+        plugin.takeScreenshot(tile.getId(), (screenshotBytes) -> {
+            if (screenshotBytes != null) {
+                showScreenshotPreviewDialog(tile, screenshotBytes);
+            } else {
+                JOptionPane.showMessageDialog(this, "Failed to take screenshot.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+    }
+
+    private void showScreenshotPreviewDialog(Tile tile, byte[] screenshotBytes) {
+        JDialog previewDialog = new JDialog(this, "Screenshot Preview", true);
+        previewDialog.setSize(600, 400);
+        previewDialog.setLocationRelativeTo(this);
+        previewDialog.setLayout(new BorderLayout());
+
+        JLabel screenshotLabel = new JLabel(new ImageIcon(screenshotBytes));
+        previewDialog.add(new JScrollPane(screenshotLabel), BorderLayout.CENTER);
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+        JButton cancelButton = new JButton("Cancel");
+        JButton submitButton = new JButton("Submit");
+
+        cancelButton.addActionListener(e -> previewDialog.dispose());
+        submitButton.addActionListener(e -> {
+            plugin.submitTileCompletionWithScreenshot(tile.getId(), screenshotBytes);
+            previewDialog.dispose();
+        });
+
+        buttonPanel.add(cancelButton);
+        buttonPanel.add(submitButton);
+
+        previewDialog.add(buttonPanel, BorderLayout.SOUTH);
+        previewDialog.setVisible(true);
     }
 }
