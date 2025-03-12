@@ -1,9 +1,7 @@
 package org.bingoscape;
 
 import com.google.inject.Provides;
-
 import javax.inject.Inject;
-
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -29,14 +27,7 @@ import java.io.ByteArrayOutputStream;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import okhttp3.RequestBody;
-import okhttp3.MediaType;
-import okhttp3.MultipartBody;
+import okhttp3.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.bingoscape.apiclient.BingoScapeApiClient;
@@ -44,7 +35,8 @@ import org.bingoscape.models.*;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
@@ -56,6 +48,12 @@ import java.util.function.Consumer;
         tags = {"bingo", "clan", "event", "minigame"}
 )
 public class BingoScapePlugin extends Plugin {
+    // Constants
+    private static final String ICON_PATH = "/sidepanel_icon.png";
+    private static final String PNG_FORMAT = "png";
+    private static final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/png");
+
+    // Injected components
     @Inject
     private Client client;
 
@@ -77,23 +75,26 @@ public class BingoScapePlugin extends Plugin {
     @Inject
     private ScheduledExecutorService executor;
 
+    // Plugin components
     private NavigationButton navButton;
     private BingoScapePanel panel;
     private final Gson gson = new GsonBuilder().create();
-    private List<EventData> activeEvents = new ArrayList<>();
-    private EventData currentEvent;
-    private Bingo currentBingo;
     private BingoScapeApiClient bingoScapeApiClient;
 
+    // State
+    private final List<EventData> activeEvents = new CopyOnWriteArrayList<>();
+    private EventData currentEvent;
+    private Bingo currentBingo;
     private boolean isLoggedIn;
 
     @Override
-    protected void startUp() throws Exception {
+    protected void startUp() {
+        // Initialize components
         panel = new BingoScapePanel(this);
-        bingoScapeApiClient = new BingoScapeApiClient(this.httpClient, config);
+        bingoScapeApiClient = new BingoScapeApiClient(httpClient, config);
 
-        final BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/sidepanel_icon.png");
-
+        // Set up navigation button
+        final BufferedImage icon = ImageUtil.loadImageResource(getClass(), ICON_PATH);
         navButton = NavigationButton.builder()
                 .tooltip("BingoScape")
                 .icon(icon)
@@ -103,7 +104,8 @@ public class BingoScapePlugin extends Plugin {
 
         clientToolbar.addNavigation(navButton);
 
-        if (config.apiKey() != null && !config.apiKey().isEmpty()) {
+        // Initialize data
+        if (hasApiKey()) {
             fetchActiveEvents();
         } else {
             panel.showApiKeyPrompt();
@@ -111,25 +113,24 @@ public class BingoScapePlugin extends Plugin {
     }
 
     @Override
-    protected void shutDown() throws Exception {
+    protected void shutDown() {
         clientToolbar.removeNavigation(navButton);
     }
 
     @Subscribe
     public void onGameStateChanged(GameStateChanged gameStateChanged) {
-        if (gameStateChanged.getGameState() == GameState.LOGGED_IN) {
-            isLoggedIn = true;
-            if (config.apiKey() != null && !config.apiKey().isEmpty()) {
-                fetchActiveEvents();
-            }
-        } else {
-            isLoggedIn = false;
+        boolean wasLoggedIn = isLoggedIn;
+        isLoggedIn = gameStateChanged.getGameState() == GameState.LOGGED_IN;
+
+        // Only fetch if player has just logged in
+        if (isLoggedIn && !wasLoggedIn && hasApiKey()) {
+            fetchActiveEvents();
         }
     }
 
     @Schedule(period = 2, unit = ChronoUnit.MINUTES)
     public void scheduledRefresh() {
-        if (client.getGameState() == GameState.LOGGED_IN && config.apiKey() != null && !config.apiKey().isEmpty()) {
+        if (client.getGameState() == GameState.LOGGED_IN && hasApiKey()) {
             fetchActiveEvents();
             if (currentEvent != null) {
                 setEventDetails(currentEvent);
@@ -139,20 +140,32 @@ public class BingoScapePlugin extends Plugin {
 
     public void setApiKey(String apiKey) {
         config.apiKey(apiKey);
+        bingoScapeApiClient = new BingoScapeApiClient(httpClient, config);
         fetchActiveEvents();
     }
 
     public BingoTileResponse fetchBingoTileStatus(UUID bingoId) {
         try {
-            return this.bingoScapeApiClient.getBingoTiles(bingoId);
+            return bingoScapeApiClient.getBingoTiles(bingoId);
         } catch (IOException e) {
+            log.error("Failed to fetch bingo tile status", e);
             return null;
         }
     }
 
+    public CompletableFuture<BingoTileResponse> fetchBingoTileStatusAsync(UUID bingoId) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return bingoScapeApiClient.getBingoTiles(bingoId);
+            } catch (IOException e) {
+                log.error("Failed to fetch bingo tile status", e);
+                return null;
+            }
+        }, executor);
+    }
 
     public void fetchActiveEvents() {
-        if (config.apiKey() == null || config.apiKey().isEmpty()) {
+        if (!hasApiKey()) {
             return;
         }
 
@@ -160,7 +173,7 @@ public class BingoScapePlugin extends Plugin {
 
         Request request = new Request.Builder()
                 .url(apiUrl)
-                .header("Authorization", String.format("Bearer %s", config.apiKey()))
+                .header("Authorization", "Bearer " + config.apiKey())
                 .build();
 
         httpClient.newCall(request).enqueue(new Callback() {
@@ -171,17 +184,19 @@ public class BingoScapePlugin extends Plugin {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                if (!response.isSuccessful()) {
-                    log.error("Unsuccessful response: " + response);
-                    return;
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful() || responseBody == null) {
+                        log.error("Unsuccessful response: " + response);
+                        return;
+                    }
+
+                    String jsonData = responseBody.string();
+                    EventData[] eventsResponse = gson.fromJson(jsonData, EventData[].class);
+
+                    activeEvents.clear();
+                    activeEvents.addAll(Arrays.asList(eventsResponse));
+                    panel.updateEventsList(activeEvents);
                 }
-
-                String jsonData = response.body().string();
-                log.info(jsonData);
-                EventData[] eventsResponse = gson.fromJson(jsonData, EventData[].class);
-
-                activeEvents = Arrays.asList(eventsResponse);
-                panel.updateEventsList(activeEvents);
             }
         });
     }
@@ -191,10 +206,9 @@ public class BingoScapePlugin extends Plugin {
         panel.updateEventDetails(eventData);
 
         if (eventData.getBingos() != null && !eventData.getBingos().isEmpty()) {
-            // Default to first bingo
+            // Default to first bingo or current one if it exists
             selectBingo(currentBingo == null ?
-                    eventData.getBingos().get(0)
-                    : currentBingo);
+                    eventData.getBingos().get(0) : currentBingo);
         }
     }
 
@@ -203,72 +217,51 @@ public class BingoScapePlugin extends Plugin {
         panel.displayBingoBoard(currentBingo);
     }
 
-
     public void takeScreenshot(UUID tileId, Consumer<byte[]> callback) {
-        Consumer<Image> imageCallback = (img) -> {
+        drawManager.requestNextFrameListener(image -> {
             executor.submit(() -> {
                 try {
-                    BufferedImage screenshot = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
-                    Graphics graphics = screenshot.getGraphics();
-                    graphics.drawImage(img, 0, 0, null);
-                    graphics.dispose();
-
-                    ByteArrayOutputStream screenshotOutput = new ByteArrayOutputStream();
-                    ImageIO.write(screenshot, "png", screenshotOutput);
-                    byte[] screenshotBytes = screenshotOutput.toByteArray();
-
+                    BufferedImage screenshot = convertToBufferedImage(image);
+                    byte[] screenshotBytes = convertImageToBytes(screenshot);
                     callback.accept(screenshotBytes);
                 } catch (IOException e) {
                     log.error("Failed to process screenshot", e);
-                    clientThread.invokeLater(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to take screenshot for submission.", null));
+                    showErrorMessage("Failed to take screenshot for submission.");
                     callback.accept(null);
                 }
             });
-        };
+        });
+    }
 
-        drawManager.requestNextFrameListener(imageCallback);
+    private BufferedImage convertToBufferedImage(Image image) {
+        BufferedImage screenshot = new BufferedImage(
+                image.getWidth(null),
+                image.getHeight(null),
+                BufferedImage.TYPE_INT_ARGB
+        );
+        Graphics graphics = screenshot.getGraphics();
+        graphics.drawImage(image, 0, 0, null);
+        graphics.dispose();
+        return screenshot;
+    }
+
+    private byte[] convertImageToBytes(BufferedImage image) throws IOException {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        ImageIO.write(image, PNG_FORMAT, outputStream);
+        return outputStream.toByteArray();
     }
 
     public void submitTileCompletionWithScreenshot(UUID tileId, byte[] screenshotBytes) {
-//        if (!isLoggedIn) {
-//            SwingUtilities.invokeLater(() -> {
-//                JOptionPane.showMessageDialog(
-//                        panel,
-//                        "You must be logged into RuneScape to submit a tile completion.",
-//                        "Not Logged In",
-//                        JOptionPane.ERROR_MESSAGE
-//                );
-//            });
-//            return;
-//        }
-//
-//        if (config.apiKey() == null || config.apiKey().isEmpty()) {
-//            SwingUtilities.invokeLater(() -> {
-//                JOptionPane.showMessageDialog(
-//                        panel,
-//                        "API key is missing. Please set your API key in the plugin settings.",
-//                        "Missing API Key",
-//                        JOptionPane.ERROR_MESSAGE
-//                );
-//            });
-//            return;
-//        }
-
         String apiUrl = config.apiBaseUrl() + "/api/runelite/tiles/" + tileId + "/submissions";
 
-        MultipartBody.Builder multipartBuilder = new MultipartBody.Builder()
-                .setType(MultipartBody.FORM);
-
-        if (screenshotBytes != null) {
-            multipartBuilder.addFormDataPart("image", "screenshot.png",
-                    RequestBody.create(MediaType.parse("image/png"), screenshotBytes));
-        }
-
-        RequestBody requestBody = multipartBuilder.build();
+        RequestBody requestBody = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("image", "screenshot.png", RequestBody.create(MEDIA_TYPE_PNG, screenshotBytes))
+                .build();
 
         Request request = new Request.Builder()
                 .url(apiUrl)
-                .header("Authorization", String.format("Bearer %s", config.apiKey()))
+                .header("Authorization", "Bearer " + config.apiKey())
                 .post(requestBody)
                 .build();
 
@@ -276,28 +269,43 @@ public class BingoScapePlugin extends Plugin {
             @Override
             public void onFailure(Call call, IOException e) {
                 log.error("Failed to submit tile completion", e);
-                clientThread.invokeLater(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null));
+                showErrorMessage("Failed to submit tile completion to BingoScape.");
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                if (!response.isSuccessful()) {
-                    log.error("Unsuccessful submission response: " + response);
-                    clientThread.invokeLater(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Failed to submit tile completion to BingoScape.", null));
+            public void onResponse(Call call, Response response) {
+                try {
+                    if (!response.isSuccessful()) {
+                        log.error("Unsuccessful submission response: " + response);
+                        showErrorMessage("Failed to submit tile completion to BingoScape.");
+                        return;
+                    }
+
+                    showSuccessMessage("Tile submission sent to BingoScape!");
+
+                    // Refresh the current bingo board
+                    if (currentEvent != null) {
+                        setEventDetails(currentEvent);
+                    }
+                } finally {
                     response.close();
-                    return;
                 }
-
-                clientThread.invokeLater(() -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Tile submission sent to BingoScape!", null));
-
-                // Refresh the current bingo board
-                if (currentEvent != null) {
-                    setEventDetails(currentEvent);
-                }
-
-                response.close();
             }
         });
+    }
+
+    private void showErrorMessage(String message) {
+        clientThread.invokeLater(() ->
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null));
+    }
+
+    private void showSuccessMessage(String message) {
+        clientThread.invokeLater(() ->
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null));
+    }
+
+    private boolean hasApiKey() {
+        return config.apiKey() != null && !config.apiKey().isEmpty();
     }
 
     @Provides
@@ -305,4 +313,3 @@ public class BingoScapePlugin extends Plugin {
         return configManager.getConfig(BingoScapeConfig.class);
     }
 }
-
