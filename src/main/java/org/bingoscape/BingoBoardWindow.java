@@ -78,7 +78,7 @@ public class BingoBoardWindow extends JFrame {
 
         // Display the bingo board
         updateGridLayout(bingo);
-        displayBingoBoard(bingo);
+        updateBingoBoard(bingo);
     }
 
     private void updateGridLayout(Bingo bingo) {
@@ -97,9 +97,11 @@ public class BingoBoardWindow extends JFrame {
         });
     }
 
+    // Ensure the displayBingoBoard method properly fetches fresh status data:
     private void displayBingoBoard(Bingo bingo) {
         // Fetch tile status in background thread to not block UI
         executor.submit(() -> {
+            // Force a fresh fetch of tile statuses
             BingoTileResponse bingoTileResponse = this.plugin.fetchBingoTileStatus(bingo.getId());
             Map<UUID, TileStatus> tileStatuses = bingoTileResponse != null ? bingoTileResponse.getTiles() : null;
 
