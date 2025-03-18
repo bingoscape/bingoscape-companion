@@ -283,13 +283,29 @@ public class BingoScapePlugin extends Plugin {
 
                     showSuccessMessage("Tile submission sent to BingoScape!");
 
-                    // Refresh the current bingo board
-                    if (currentEvent != null) {
-                        setEventDetails(currentEvent);
+                    // Refresh the current bingo board with updated tile statuses
+                    if (currentBingo != null) {
+                        refreshBingoBoard(currentBingo);
                     }
                 } finally {
                     response.close();
                 }
+            }
+        });
+    }
+
+    // Add this new method to handle refreshing the bingo board:
+    private void refreshBingoBoard(Bingo bingo) {
+        // Fetch the latest tile status data
+        executor.submit(() -> {
+            try {
+                BingoTileResponse tileResponse = bingoScapeApiClient.getBingoTiles(bingo.getId());
+                if (tileResponse != null) {
+                    // Update the current bingo board window with fresh data
+                    panel.displayBingoBoard(bingo);
+                }
+            } catch (IOException e) {
+                log.error("Failed to refresh bingo board after submission", e);
             }
         });
     }
