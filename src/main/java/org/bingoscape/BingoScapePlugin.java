@@ -1,7 +1,9 @@
 package org.bingoscape;
 
 import com.google.inject.Provides;
+
 import javax.inject.Inject;
+
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -25,17 +27,14 @@ import java.awt.Graphics;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import javax.imageio.ImageIO;
-import javax.swing.*;
 
 import okhttp3.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import org.bingoscape.apiclient.BingoScapeApiClient;
 import org.bingoscape.models.*;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
@@ -79,7 +78,6 @@ public class BingoScapePlugin extends Plugin {
     private NavigationButton navButton;
     private BingoScapePanel panel;
     private final Gson gson = new GsonBuilder().create();
-    private BingoScapeApiClient bingoScapeApiClient;
 
     // State
     private final List<EventData> activeEvents = new CopyOnWriteArrayList<>();
@@ -91,7 +89,6 @@ public class BingoScapePlugin extends Plugin {
     protected void startUp() {
         // Initialize components
         panel = new BingoScapePanel(this);
-        bingoScapeApiClient = new BingoScapeApiClient(httpClient, config);
 
         // Set up navigation button
         final BufferedImage icon = ImageUtil.loadImageResource(getClass(), ICON_PATH);
@@ -140,28 +137,7 @@ public class BingoScapePlugin extends Plugin {
 
     public void setApiKey(String apiKey) {
         config.apiKey(apiKey);
-        bingoScapeApiClient = new BingoScapeApiClient(httpClient, config);
         fetchActiveEvents();
-    }
-
-    public BingoTileResponse fetchBingoTileStatus(UUID bingoId) {
-        try {
-            return bingoScapeApiClient.getBingoTiles(bingoId);
-        } catch (IOException e) {
-            log.error("Failed to fetch bingo tile status", e);
-            return null;
-        }
-    }
-
-    public CompletableFuture<BingoTileResponse> fetchBingoTileStatusAsync(UUID bingoId) {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return bingoScapeApiClient.getBingoTiles(bingoId);
-            } catch (IOException e) {
-                log.error("Failed to fetch bingo tile status", e);
-                return null;
-            }
-        }, executor);
     }
 
     public void fetchActiveEvents() {
@@ -298,15 +274,8 @@ public class BingoScapePlugin extends Plugin {
     private void refreshBingoBoard(Bingo bingo) {
         // Fetch the latest tile status data
         executor.submit(() -> {
-            try {
-                BingoTileResponse tileResponse = bingoScapeApiClient.getBingoTiles(bingo.getId());
-                if (tileResponse != null) {
-                    // Update the current bingo board window with fresh data
-                    panel.displayBingoBoard(bingo);
-                }
-            } catch (IOException e) {
-                log.error("Failed to refresh bingo board after submission", e);
-            }
+            // Update the current bingo board window with fresh data
+            panel.displayBingoBoard(bingo);
         });
     }
 

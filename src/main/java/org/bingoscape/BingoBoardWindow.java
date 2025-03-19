@@ -2,10 +2,7 @@ package org.bingoscape;
 
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
-import org.bingoscape.models.Bingo;
-import org.bingoscape.models.BingoTileResponse;
-import org.bingoscape.models.Tile;
-import org.bingoscape.models.TileStatus;
+import org.bingoscape.models.*;
 
 import javax.swing.*;
 import javax.swing.border.CompoundBorder;
@@ -18,11 +15,10 @@ import java.net.URL;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 import javax.imageio.ImageIO;
+import java.util.List;
 
 public class BingoBoardWindow extends JFrame {
     private static final int WINDOW_WIDTH = 600;
@@ -97,38 +93,64 @@ public class BingoBoardWindow extends JFrame {
         });
     }
 
-    // Ensure the displayBingoBoard method properly fetches fresh status data:
+    // Updated to use new tile model with submission data directly
     private void displayBingoBoard(Bingo bingo) {
-        // Fetch tile status in background thread to not block UI
-        executor.submit(() -> {
-            // Force a fresh fetch of tile statuses
-            BingoTileResponse bingoTileResponse = this.plugin.fetchBingoTileStatus(bingo.getId());
-            Map<UUID, TileStatus> tileStatuses = bingoTileResponse != null ? bingoTileResponse.getTiles() : null;
+        SwingUtilities.invokeLater(() -> {
+            bingoBoard.removeAll();
 
-            SwingUtilities.invokeLater(() -> {
-                bingoBoard.removeAll();
+            if (bingo == null || bingo.getTiles() == null) {
+                return;
+            }
 
-                if (bingo == null || bingo.getTiles() == null) {
-                    return;
+            // Sort tiles by position
+            bingo.getTiles().sort((a, b) -> Integer.compare(a.getIndex(), b.getIndex()));
+
+            // Create all tile panels at once
+            for (Tile tile : bingo.getTiles()) {
+                // Skip hidden tiles
+                if (tile.isHidden()) {
+                    JPanel hiddenPanel = createHiddenTilePanel();
+                    bingoBoard.add(hiddenPanel);
+                    continue;
                 }
 
-                // Sort tiles by position
-                bingo.getTiles().sort((a, b) -> Integer.compare(a.getIndex(), b.getIndex()));
+                JPanel tilePanel = createTilePanel(tile);
+                bingoBoard.add(tilePanel);
+            }
 
-                // Create all tile panels at once
-                for (Tile tile : bingo.getTiles()) {
-                    TileStatus status = tileStatuses != null ? tileStatuses.get(tile.getId()) : null;
-                    JPanel tilePanel = createTilePanel(tile, status);
-                    bingoBoard.add(tilePanel);
-                }
-
-                bingoBoard.revalidate();
-                bingoBoard.repaint();
-            });
+            bingoBoard.revalidate();
+            bingoBoard.repaint();
         });
     }
 
-    private JPanel createTilePanel(Tile tile, TileStatus status) {
+    private JPanel createHiddenTilePanel() {
+        // Calculate tile size based on board dimensions
+        int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
+        int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
+        int availableWidth = WINDOW_WIDTH - 40;
+        int availableHeight = WINDOW_HEIGHT - 100;
+        int tileSize = Math.min(availableWidth / cols, availableHeight / rows) - PADDING;
+
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setPreferredSize(new Dimension(tileSize, tileSize));
+        panel.setMinimumSize(new Dimension(tileSize, tileSize));
+        panel.setMaximumSize(new Dimension(tileSize, tileSize));
+        panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        panel.setBorder(new CompoundBorder(
+                new LineBorder(ColorScheme.BORDER_COLOR, 1),
+                new EmptyBorder(4, 4, 4, 4)
+        ));
+
+        JLabel hiddenLabel = new JLabel("?", SwingConstants.CENTER);
+        hiddenLabel.setForeground(Color.GRAY);
+        hiddenLabel.setFont(new Font(hiddenLabel.getFont().getName(), Font.BOLD, 24));
+        panel.add(hiddenLabel, BorderLayout.CENTER);
+
+        panel.setToolTipText("Hidden tile");
+        return panel;
+    }
+
+    private JPanel createTilePanel(Tile tile) {
         // Calculate tile size based on board dimensions
         int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
         int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
@@ -142,12 +164,24 @@ public class BingoBoardWindow extends JFrame {
         panel.setMaximumSize(new Dimension(tileSize, tileSize));
         panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
         panel.setBorder(new CompoundBorder(
-                new LineBorder(getTileBorderColor(status), 1),
+                new LineBorder(getTileBorderColor(tile.getSubmission()), 1),
                 new EmptyBorder(4, 4, 4, 4)
         ));
 
         // Add tooltip with title and weight
-        panel.setToolTipText(tile.getTitle() + " (XP: " + tile.getWeight() + ")");
+        StringBuilder tooltip = new StringBuilder();
+        tooltip.append("<html>").append(tile.getTitle()).append(" (XP: ").append(tile.getWeight()).append(")");
+
+        // Add goal information to tooltip if available
+        if (tile.getGoals() != null && !tile.getGoals().isEmpty()) {
+            tooltip.append("<br><br>Goals:");
+            for (Goal goal : tile.getGoals()) {
+                tooltip.append("<br>• ").append(goal.getDescription()).append(": ").append(goal.getTargetValue());
+            }
+        }
+        tooltip.append("</html>");
+
+        panel.setToolTipText(tooltip.toString());
 
         // Add image if available, otherwise show title
         if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
@@ -158,10 +192,50 @@ public class BingoBoardWindow extends JFrame {
             panel.add(titleLabel, BorderLayout.CENTER);
         }
 
+        // Add status overlay if not "not_submitted"
+        if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null &&
+                tile.getSubmission().getStatus() != TileSubmissionType.NOT_SUBMITTED) {
+            addStatusOverlay(panel, tile.getSubmission());
+        }
+
         // Add click behavior
         addTilePanelListeners(panel, tile);
 
         return panel;
+    }
+
+    private void addStatusOverlay(JPanel panel, TileSubmission submission) {
+        JPanel overlayPanel = new JPanel(new BorderLayout());
+        overlayPanel.setOpaque(false);
+
+        JLabel statusLabel = new JLabel();
+        statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        statusLabel.setFont(new Font(statusLabel.getFont().getName(), Font.BOLD, 12));
+
+        switch (submission.getStatus()) {
+            case PENDING:
+                statusLabel.setText("PENDING");
+                statusLabel.setForeground(new Color(59, 130, 246));
+                break;
+            case ACCEPTED:
+                statusLabel.setText("COMPLETED");
+                statusLabel.setForeground(new Color(34, 197, 94));
+                break;
+            case REQUIRES_INTERACTION:
+                statusLabel.setText("NEEDS ACTION");
+                statusLabel.setForeground(new Color(234, 179, 8));
+                break;
+            case DECLINED:
+                statusLabel.setText("DECLINED");
+                statusLabel.setForeground(new Color(239, 68, 68));
+                break;
+            default:
+                // No overlay for NOT_SUBMITTED
+                return;
+        }
+
+        overlayPanel.add(statusLabel, BorderLayout.SOUTH);
+        panel.add(overlayPanel, BorderLayout.SOUTH);
     }
 
     private void addTilePanelListeners(JPanel panel, Tile tile) {
@@ -185,11 +259,11 @@ public class BingoBoardWindow extends JFrame {
         });
     }
 
-    private Color getTileBorderColor(TileStatus status) {
-        if (status == null || status.getStatus() == null)
+    private Color getTileBorderColor(TileSubmission submission) {
+        if (submission == null || submission.getStatus() == null)
             return ColorScheme.BORDER_COLOR;
 
-        switch (status.getStatus()) {
+        switch (submission.getStatus()) {
             case PENDING:
                 return new Color(59, 130, 246);
             case ACCEPTED:
@@ -360,6 +434,54 @@ public class BingoBoardWindow extends JFrame {
         infoPanel.add(xpLabel);
         infoPanel.add(descriptionArea);
 
+        // Add goals if present
+        if (tile.getGoals() != null && !tile.getGoals().isEmpty()) {
+            JPanel goalsPanel = new JPanel();
+            goalsPanel.setLayout(new BoxLayout(goalsPanel, BoxLayout.Y_AXIS));
+            goalsPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            goalsPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
+            goalsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+            JLabel goalsLabel = new JLabel("Goals:");
+            goalsLabel.setForeground(Color.WHITE);
+            goalsLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            goalsPanel.add(goalsLabel);
+
+            for (Goal goal : tile.getGoals()) {
+                JLabel goalLabel = new JLabel("• " + goal.getDescription() + ": " + goal.getTargetValue());
+                goalLabel.setForeground(Color.LIGHT_GRAY);
+                goalLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                goalsPanel.add(goalLabel);
+            }
+
+            infoPanel.add(goalsPanel);
+        }
+
+        // Add submission status if any
+        if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null &&
+                tile.getSubmission().getStatus() != TileSubmissionType.NOT_SUBMITTED) {
+
+            JPanel statusPanel = new JPanel();
+            statusPanel.setLayout(new BoxLayout(statusPanel, BoxLayout.Y_AXIS));
+            statusPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+            statusPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
+            statusPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+            JLabel statusLabel = new JLabel("Status: " + getStatusText(tile.getSubmission().getStatus()));
+            statusLabel.setForeground(getStatusColor(tile.getSubmission().getStatus()));
+            statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            statusPanel.add(statusLabel);
+
+            if (tile.getSubmission().getSubmissionCount() > 0) {
+                JLabel countLabel = new JLabel("Submissions: " + tile.getSubmission().getSubmissionCount());
+                countLabel.setForeground(Color.LIGHT_GRAY);
+                countLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                statusPanel.add(countLabel);
+            }
+
+            infoPanel.add(statusPanel);
+        }
+
         // Right side: Image panel
         JPanel imagePanel = createTileImagePanel(tile);
 
@@ -367,6 +489,26 @@ public class BingoBoardWindow extends JFrame {
         mainPanel.add(imagePanel, BorderLayout.EAST);
 
         return mainPanel;
+    }
+
+    private String getStatusText(TileSubmissionType status) {
+        switch (status) {
+            case PENDING: return "Pending Review";
+            case ACCEPTED: return "Completed";
+            case REQUIRES_INTERACTION: return "Needs Action";
+            case DECLINED: return "Declined";
+            default: return "Not Submitted";
+        }
+    }
+
+    private Color getStatusColor(TileSubmissionType status) {
+        switch (status) {
+            case PENDING: return new Color(59, 130, 246);
+            case ACCEPTED: return new Color(34, 197, 94);
+            case REQUIRES_INTERACTION: return new Color(234, 179, 8);
+            case DECLINED: return new Color(239, 68, 68);
+            default: return Color.LIGHT_GRAY;
+        }
     }
 
     private JPanel createTileImagePanel(Tile tile) {
@@ -448,6 +590,13 @@ public class BingoBoardWindow extends JFrame {
 
         JButton cancelButton = new JButton("Cancel");
         JButton submitButton = new JButton("Take & Review Screenshot");
+
+        // If tile is already completed, adjust the UI accordingly
+        if (tile.getSubmission() != null &&
+                tile.getSubmission().getStatus() == TileSubmissionType.ACCEPTED) {
+            submitButton.setText("Already Completed");
+            submitButton.setEnabled(false);
+        }
 
         cancelButton.addActionListener(e -> dialog.dispose());
         submitButton.addActionListener(e -> {

@@ -5,6 +5,7 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import org.bingoscape.models.Bingo;
 import org.bingoscape.models.EventData;
+import org.bingoscape.models.Role;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -17,17 +18,21 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import javax.swing.DefaultListCellRenderer;
 import java.awt.event.ActionListener;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class BingoScapePanel extends PluginPanel {
     // Constants
     private static final int BORDER_SPACING = 10;
     private static final int COMPONENT_SPACING = 10;
     private static final String NO_EVENTS_TEXT = "No active events found";
+    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy");
 
     // Components
     private final JPanel eventsPanel = new JPanel();
     private final JPanel bingoPanel = new JPanel();
     private final JPanel apiKeyPanel = new JPanel();
+    private final JPanel eventDetailsPanel = new JPanel();
     private final JComboBox<EventData> eventSelector = new JComboBox<>();
     private final JComboBox<Bingo> bingoSelector = new JComboBox<>();
     private final JButton showBingoBoardButton;
@@ -53,16 +58,19 @@ public class BingoScapePanel extends PluginPanel {
         // Setup Events Panel
         setupEventsPanel();
 
+        // Setup Event Details Panel
+        setupEventDetailsPanel();
+
         // Create show bingo board button
         showBingoBoardButton = createShowBingoBoardButton();
 
         // Setup Bingo Panel
         setupBingoPanel();
 
-
         // Add panels to main panel
         add(apiKeyPanel, BorderLayout.NORTH);
         add(eventsPanel, BorderLayout.CENTER);
+        eventDetailsPanel.setVisible(false);
         bingoPanel.setVisible(false);
     }
 
@@ -89,6 +97,14 @@ public class BingoScapePanel extends PluginPanel {
 
         configureEventSelector();
         eventsPanel.add(eventSelector, BorderLayout.CENTER);
+    }
+
+    private void setupEventDetailsPanel() {
+        eventDetailsPanel.setLayout(new BoxLayout(eventDetailsPanel, BoxLayout.Y_AXIS));
+        eventDetailsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        eventDetailsPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 0, COMPONENT_SPACING, 0));
+
+        add(eventDetailsPanel, BorderLayout.SOUTH);
     }
 
     private void configureEventSelector() {
@@ -171,7 +187,18 @@ public class BingoScapePanel extends PluginPanel {
                                                           boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof Bingo) {
-                    setText(((Bingo) value).getTitle());
+                    Bingo bingo = (Bingo) value;
+                    StringBuilder text = new StringBuilder(bingo.getTitle());
+
+                    // Show if the bingo is locked or visible
+                    if (bingo.isLocked()) {
+                        text.append(" [Locked]");
+                    }
+                    if (bingo.isVisible()) {
+                        text.append(" [Visible]");
+                    }
+
+                    setText(text.toString());
                 }
 
                 if (isSelected) {
@@ -270,6 +297,7 @@ public class BingoScapePanel extends PluginPanel {
                 JLabel noEventsLabel = new JLabel(NO_EVENTS_TEXT);
                 noEventsLabel.setForeground(Color.LIGHT_GRAY);
                 eventsPanel.add(noEventsLabel, BorderLayout.SOUTH);
+                eventDetailsPanel.setVisible(false);
                 bingoPanel.setVisible(false);
                 return;
             }
@@ -292,21 +320,131 @@ public class BingoScapePanel extends PluginPanel {
 
     public void updateEventDetails(EventData event) {
         SwingUtilities.invokeLater(() -> {
+            // Clear previous event details
+            eventDetailsPanel.removeAll();
             bingoSelector.removeAllItems();
 
-            if (event.getBingos() == null || event.getBingos().isEmpty()) {
+            // Build event details panel
+            if (event != null) {
+                // Set up the event details panel
+                JPanel detailsContent = new JPanel();
+                detailsContent.setLayout(new BoxLayout(detailsContent, BoxLayout.Y_AXIS));
+                detailsContent.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+                // Event description
+                if (event.getDescription() != null && !event.getDescription().isEmpty()) {
+                    JTextArea descriptionArea = new JTextArea(event.getDescription());
+                    descriptionArea.setWrapStyleWord(true);
+                    descriptionArea.setLineWrap(true);
+                    descriptionArea.setEditable(false);
+                    descriptionArea.setForeground(Color.WHITE);
+                    descriptionArea.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                    descriptionArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    descriptionArea.setBorder(new EmptyBorder(0, 0, COMPONENT_SPACING, 0));
+                    detailsContent.add(descriptionArea);
+                }
+
+                // Event dates
+                JPanel datesPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+                datesPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+                if (event.getStartDate() != null && event.getEndDate() != null) {
+                    JLabel datesLabel = new JLabel(
+                            "Event dates: " + DATE_FORMAT.format(event.getStartDate()) +
+                                    " - " + DATE_FORMAT.format(event.getEndDate())
+                    );
+                    datesLabel.setForeground(Color.LIGHT_GRAY);
+                    datesPanel.add(datesLabel);
+                }
+
+                detailsContent.add(datesPanel);
+
+                // Prize pool info if available
+                if (event.getBasePrizePool() > 0) {
+                    JPanel prizePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+                    prizePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+                    long prizeInMillions = event.getBasePrizePool() / 1_000_000;
+                    JLabel prizeLabel = new JLabel("Prize pool: " + prizeInMillions + "M GP");
+                    prizeLabel.setForeground(Color.LIGHT_GRAY);
+                    prizePanel.add(prizeLabel);
+
+                    detailsContent.add(prizePanel);
+                }
+
+                // User role and team info
+                JPanel userInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+                userInfoPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+                // Role
+                if (event.getRole() != null) {
+                    JLabel roleLabel = new JLabel("Role: " + formatRole(event.getRole()));
+                    roleLabel.setForeground(Color.LIGHT_GRAY);
+                    userInfoPanel.add(roleLabel);
+                }
+
+                // Team
+                if (event.getUserTeam() != null) {
+                    JLabel teamLabel = new JLabel("  Team: " + event.getUserTeam().getName());
+                    teamLabel.setForeground(Color.LIGHT_GRAY);
+                    userInfoPanel.add(teamLabel);
+
+                    if (event.getUserTeam().isLeader()) {
+                        JLabel leaderLabel = new JLabel(" (Team Leader)");
+                        leaderLabel.setForeground(new Color(255, 215, 0)); // Gold color for leader
+                        userInfoPanel.add(leaderLabel);
+                    }
+                }
+
+                detailsContent.add(userInfoPanel);
+
+                // Clan info
+                if (event.getClan() != null) {
+                    JPanel clanPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+                    clanPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+                    JLabel clanLabel = new JLabel("Clan: " + event.getClan().getName());
+                    clanLabel.setForeground(Color.LIGHT_GRAY);
+                    clanPanel.add(clanLabel);
+
+                    detailsContent.add(clanPanel);
+                }
+
+                eventDetailsPanel.add(detailsContent);
+                eventDetailsPanel.setVisible(true);
+
+                // Populate bingo selector
+                if (event.getBingos() != null && !event.getBingos().isEmpty()) {
+                    for (Bingo bingo : event.getBingos()) {
+                        bingoSelector.addItem(bingo);
+                    }
+                    bingoPanel.setVisible(true);
+                } else {
+                    bingoPanel.setVisible(false);
+                }
+            } else {
+                eventDetailsPanel.setVisible(false);
                 bingoPanel.setVisible(false);
-                return;
             }
 
-            for (Bingo bingo : event.getBingos()) {
-                bingoSelector.addItem(bingo);
-            }
-
-            bingoPanel.setVisible(true);
             revalidate();
             repaint();
         });
+    }
+
+    private String formatRole(Role role) {
+        if (role == null) return "Participant";
+
+        switch (role) {
+            case ADMIN:
+                return "Admin";
+            case MANAGEMENT:
+                return "Manager";
+            case PARTICIPANT:
+                return "Participant";
+            default:
+                return role.toString();
+        }
     }
 
     public void displayBingoBoard(Bingo bingo) {
@@ -320,15 +458,4 @@ public class BingoScapePanel extends PluginPanel {
             });
         }
     }
-
-
-//    // Clean up resources when panel is removed
-//    @Override
-//    public void onUninstall() {
-//        if (bingoBoardWindow != null) {
-//            bingoBoardWindow.dispose();
-//        }
-//        executor.shutdown();
-//        super.onUninstall();
-//    }
 }

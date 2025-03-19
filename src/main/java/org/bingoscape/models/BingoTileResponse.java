@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Response class for the bingo tiles API endpoint
+ * Enhanced BingoTileResponse to include team details
  */
 @Data
 @NoArgsConstructor
