@@ -32,7 +32,6 @@ public class BingoScapePanel extends PluginPanel {
     // Components
     private final JPanel eventsPanel = new JPanel();
     private final JPanel bingoPanel = new JPanel();
-    private final JPanel apiKeyPanel = new JPanel();
     private final JPanel eventDetailsPanel = new JPanel();
     private final JComboBox<EventData> eventSelector = new JComboBox<>();
     private final JComboBox<Bingo> bingoSelector = new JComboBox<>();
@@ -53,38 +52,22 @@ public class BingoScapePanel extends PluginPanel {
         setBorder(new EmptyBorder(BORDER_SPACING, BORDER_SPACING, BORDER_SPACING, BORDER_SPACING));
         setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-        // Setup API Key Panel
-        setupApiKeyPanel();
 
         // Setup Events Panel
-        setupEventsPanel();
 
         // Setup Event Details Panel
-        setupEventDetailsPanel();
 
         // Create show bingo board button
         showBingoBoardButton = createShowBingoBoardButton();
 
         // Setup Bingo Panel
-        setupBingoPanel();
 
         // Add panels to main panel
-        add(apiKeyPanel, BorderLayout.NORTH);
-        add(eventsPanel, BorderLayout.CENTER);
-        eventDetailsPanel.setVisible(false);
+//        add(apiKeyPanel, BorderLayout.NORTH);
+        setupEventsPanel();
+        setupBingoPanel();
+        setupEventDetailsPanel();
         bingoPanel.setVisible(false);
-    }
-
-    private void setupApiKeyPanel() {
-        apiKeyPanel.setLayout(new BorderLayout());
-        apiKeyPanel.setBorder(new EmptyBorder(0, 0, COMPONENT_SPACING, 0));
-        apiKeyPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-        JLabel titleLabel = new JLabel("BingoScape");
-        titleLabel.setFont(FontManager.getRunescapeBoldFont());
-        titleLabel.setForeground(Color.WHITE);
-
-        apiKeyPanel.add(titleLabel, BorderLayout.NORTH);
     }
 
     private void setupEventsPanel() {
@@ -98,13 +81,11 @@ public class BingoScapePanel extends PluginPanel {
 
         configureEventSelector();
         eventsPanel.add(eventSelector, BorderLayout.CENTER);
+        add(eventsPanel, BorderLayout.CENTER);
     }
 
     private void setupEventDetailsPanel() {
         eventDetailsPanel.setLayout(new BoxLayout(eventDetailsPanel, BoxLayout.Y_AXIS));
-        eventDetailsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        eventDetailsPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 0, COMPONENT_SPACING, 0));
-
         add(eventDetailsPanel, BorderLayout.SOUTH);
     }
 
@@ -170,7 +151,7 @@ public class BingoScapePanel extends PluginPanel {
         buttonPanel.add(showBingoBoardButton, BorderLayout.CENTER);
         bingoPanel.add(buttonPanel, BorderLayout.CENTER);
 
-        add(bingoPanel, BorderLayout.SOUTH);
+        add(bingoPanel, BorderLayout.CENTER);
     }
 
     private void configureBingoSelector() {
@@ -194,9 +175,6 @@ public class BingoScapePanel extends PluginPanel {
                     // Show if the bingo is locked or visible
                     if (bingo.isLocked()) {
                         text.append(" [Locked]");
-                    }
-                    if (bingo.isVisible()) {
-                        text.append(" [Visible]");
                     }
 
                     setText(text.toString());
@@ -245,48 +223,6 @@ public class BingoScapePanel extends PluginPanel {
 
             bingoBoardWindow = new BingoBoardWindow(plugin, bingo);
             bingoBoardWindow.setVisible(true);
-        });
-    }
-
-    public void showApiKeyPrompt() {
-        SwingUtilities.invokeLater(() -> {
-            JPanel inputPanel = new JPanel(new BorderLayout(0, COMPONENT_SPACING));
-            inputPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 0, COMPONENT_SPACING, 0));
-            inputPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-            JLabel promptLabel = new JLabel("Please enter your BingoScape API key:");
-            promptLabel.setForeground(Color.WHITE);
-
-            JPasswordField apiKeyField = new JPasswordField();
-            apiKeyField.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            apiKeyField.setForeground(Color.WHITE);
-            apiKeyField.setBorder(new CompoundBorder(
-                    new MatteBorder(1, 1, 1, 1, ColorScheme.MEDIUM_GRAY_COLOR),
-                    new EmptyBorder(5, 5, 5, 5)
-            ));
-
-            JButton submitButton = new JButton("Submit");
-            submitButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            submitButton.setForeground(Color.WHITE);
-            submitButton.setFocusPainted(false);
-
-            submitButton.addActionListener(e -> {
-                String apiKey = new String(apiKeyField.getPassword());
-                if (!apiKey.isEmpty()) {
-                    plugin.setApiKey(apiKey);
-                    apiKeyPanel.remove(inputPanel);
-                    apiKeyPanel.revalidate();
-                    apiKeyPanel.repaint();
-                }
-            });
-
-            inputPanel.add(promptLabel, BorderLayout.NORTH);
-            inputPanel.add(apiKeyField, BorderLayout.CENTER);
-            inputPanel.add(submitButton, BorderLayout.SOUTH);
-
-            apiKeyPanel.add(inputPanel, BorderLayout.CENTER);
-            apiKeyPanel.revalidate();
-            apiKeyPanel.repaint();
         });
     }
 
@@ -434,7 +370,9 @@ public class BingoScapePanel extends PluginPanel {
                     detailsContent.add(bingoCountPanel);
                 }
 
+//                eventDetailsPanel.setBackground(new Color(255,0,0));
                 eventDetailsPanel.add(detailsContent);
+                detailsContent.setVisible(true);
                 eventDetailsPanel.setVisible(true);
 
                 // Populate bingo selector
