@@ -254,7 +254,9 @@ public class BingoScapePanel extends PluginPanel {
         return e -> {
             Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
             if (selectedBingo != null) {
-                executor.submit(() -> plugin.selectBingo(selectedBingo));
+                // Update the current bingo in the plugin first to ensure the overlay gets updated
+                plugin.selectBingo(selectedBingo);
+                showBingoBoardWindow(selectedBingo);
             }
         };
     }
