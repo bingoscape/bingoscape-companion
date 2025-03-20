@@ -66,7 +66,7 @@ public class BingoCodephraseOverlay extends OverlayPanel {
         // Add current time
         panelComponent.getChildren().add(LineComponent.builder()
                 .left("Time:")
-                .right(TIME_FORMAT.format(utcNow()))
+                .right(utcNow())
                 .rightColor(Color.LIGHT_GRAY)
                 .build());
 
