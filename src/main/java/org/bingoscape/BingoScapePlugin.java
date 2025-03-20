@@ -5,6 +5,7 @@ import com.google.inject.Provides;
 import javax.inject.Inject;
 
 import lombok.extern.slf4j.Slf4j;
+import lombok.Getter;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -15,10 +16,12 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.ClientUI;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.task.Schedule;
 import net.runelite.client.ui.DrawManager;
+import net.runelite.client.ui.overlay.OverlayManager;
 
 import java.time.temporal.ChronoUnit;
 import java.awt.image.BufferedImage;
@@ -27,6 +30,7 @@ import java.awt.Graphics;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import javax.imageio.ImageIO;
+import javax.swing.*;
 
 import okhttp3.*;
 import com.google.gson.Gson;
@@ -57,6 +61,9 @@ public class BingoScapePlugin extends Plugin {
     private Client client;
 
     @Inject
+    private ClientUI clientUI;
+
+    @Inject
     private ClientThread clientThread;
 
     @Inject
@@ -72,6 +79,12 @@ public class BingoScapePlugin extends Plugin {
     private DrawManager drawManager;
 
     @Inject
+    private OverlayManager overlayManager;
+
+    @Inject
+    private BingoCodephraseOverlay codephraseOverlay;
+
+    @Inject
     private ScheduledExecutorService executor;
 
     // Plugin components
@@ -82,6 +95,7 @@ public class BingoScapePlugin extends Plugin {
     // State
     private final List<EventData> activeEvents = new CopyOnWriteArrayList<>();
     private EventData currentEvent;
+    @Getter
     private Bingo currentBingo;
     private boolean isLoggedIn;
 
@@ -101,6 +115,9 @@ public class BingoScapePlugin extends Plugin {
 
         clientToolbar.addNavigation(navButton);
 
+        // Add the overlay
+        overlayManager.add(codephraseOverlay);
+
         // Initialize data
         if (hasApiKey()) {
             fetchActiveEvents();
@@ -110,6 +127,7 @@ public class BingoScapePlugin extends Plugin {
     @Override
     protected void shutDown() {
         clientToolbar.removeNavigation(navButton);
+        overlayManager.remove(codephraseOverlay);
     }
 
     @Subscribe
@@ -219,6 +237,18 @@ public class BingoScapePlugin extends Plugin {
         return screenshot;
     }
 
+
+    // Add this method to your plugin
+    private void showAlert(String message, String title, int messageType) {
+        SwingUtilities.invokeLater(() -> {
+            JOptionPane.showMessageDialog(
+                    panel,
+                    message,
+                    title,
+                    messageType
+            );
+        });
+    }
     private byte[] convertImageToBytes(BufferedImage image) throws IOException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         ImageIO.write(image, PNG_FORMAT, outputStream);
@@ -226,6 +256,7 @@ public class BingoScapePlugin extends Plugin {
     }
 
     public void submitTileCompletionWithScreenshot(UUID tileId, byte[] screenshotBytes) {
+
         String apiUrl = config.apiBaseUrl() + "/api/runelite/tiles/" + tileId + "/submissions";
 
         RequestBody requestBody = new MultipartBody.Builder()
