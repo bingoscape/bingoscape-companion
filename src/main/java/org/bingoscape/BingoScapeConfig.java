@@ -36,16 +36,6 @@ public interface BingoScapeConfig extends Config
     }
 
     @ConfigItem(
-            keyName = "showNotifications",
-            name = "Show Notifications",
-            description = "Show notifications for bingo updates"
-    )
-    default boolean showNotifications()
-    {
-        return true;
-    }
-
-    @ConfigItem(
             keyName = "showCodephraseOverlay",
             name = "Show Bingo Codephrase Overlay",
             description = "Display the codephrase for the currently selected bingo as an overlay"
