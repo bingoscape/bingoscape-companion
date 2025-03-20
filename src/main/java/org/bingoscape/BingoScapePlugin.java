@@ -104,8 +104,6 @@ public class BingoScapePlugin extends Plugin {
         // Initialize data
         if (hasApiKey()) {
             fetchActiveEvents();
-        } else {
-            panel.showApiKeyPrompt();
         }
     }
 
