@@ -12,6 +12,7 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.net.URL;
+import java.text.SimpleDateFormat;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -150,59 +151,180 @@ public class BingoBoardWindow extends JFrame {
         return panel;
     }
 
-    private JPanel createTilePanel(Tile tile) {
-        // Calculate tile size based on board dimensions
-        int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
-        int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
-        int availableWidth = WINDOW_WIDTH - 40;
-        int availableHeight = WINDOW_HEIGHT - 100;
-        int tileSize = Math.min(availableWidth / cols, availableHeight / rows) - PADDING;
+// Method to create enhanced tile panel with more information
+private JPanel createTilePanel(Tile tile) {
+    // Calculate tile size based on board dimensions
+    int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
+    int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
+    int availableWidth = WINDOW_WIDTH - 40;
+    int availableHeight = WINDOW_HEIGHT - 100;
+    int tileSize = Math.min(availableWidth / cols, availableHeight / rows) - PADDING;
 
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setPreferredSize(new Dimension(tileSize, tileSize));
-        panel.setMinimumSize(new Dimension(tileSize, tileSize));
-        panel.setMaximumSize(new Dimension(tileSize, tileSize));
-        panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        panel.setBorder(new CompoundBorder(
-                new LineBorder(getTileBorderColor(tile.getSubmission()), 1),
-                new EmptyBorder(4, 4, 4, 4)
-        ));
+    JPanel panel = new JPanel(new BorderLayout());
+    panel.setPreferredSize(new Dimension(tileSize, tileSize));
+    panel.setMinimumSize(new Dimension(tileSize, tileSize));
+    panel.setMaximumSize(new Dimension(tileSize, tileSize));
 
-        // Add tooltip with title and weight
-        StringBuilder tooltip = new StringBuilder();
-        tooltip.append("<html>").append(tile.getTitle()).append(" (XP: ").append(tile.getWeight()).append(")");
+    // Set background based on submission status
+    Color backgroundColor = getTileBackgroundColor(tile.getSubmission());
+    panel.setBackground(backgroundColor);
 
-        // Add goal information to tooltip if available
-        if (tile.getGoals() != null && !tile.getGoals().isEmpty()) {
-            tooltip.append("<br><br>Goals:");
-            for (Goal goal : tile.getGoals()) {
-                tooltip.append("<br>• ").append(goal.getDescription()).append(": ").append(goal.getTargetValue());
-            }
-        }
-        tooltip.append("</html>");
+    // Set border based on submission status
+    panel.setBorder(new CompoundBorder(
+            new LineBorder(getTileBorderColor(tile.getSubmission()), 2),
+            new EmptyBorder(4, 4, 4, 4)
+    ));
 
-        panel.setToolTipText(tooltip.toString());
+    // Create tooltip with extended information
+    panel.setToolTipText(createDetailedTooltip(tile));
 
-        // Add image if available, otherwise show title
-        if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
-            loadTileImage(panel, tile, tileSize);
-        } else {
-            JLabel titleLabel = new JLabel("<html><center>" + tile.getTitle() + "</center></html>", SwingConstants.CENTER);
-            titleLabel.setForeground(Color.WHITE);
-            panel.add(titleLabel, BorderLayout.CENTER);
-        }
-
-        // Add status overlay if not "not_submitted"
-        if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null &&
-                tile.getSubmission().getStatus() != TileSubmissionType.NOT_SUBMITTED) {
-            addStatusOverlay(panel, tile.getSubmission());
-        }
-
-        // Add click behavior
-        addTilePanelListeners(panel, tile);
-
-        return panel;
+    // Add image if available, otherwise show title
+    if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
+        loadTileImage(panel, tile, tileSize);
+    } else {
+        JLabel titleLabel = new JLabel("<html><center>" + tile.getTitle() + "</center></html>", SwingConstants.CENTER);
+        titleLabel.setForeground(Color.WHITE);
+        panel.add(titleLabel, BorderLayout.CENTER);
     }
+
+    // Add XP value indicator in corner
+    JLabel xpLabel = new JLabel(String.valueOf(tile.getWeight()) + " XP");
+    xpLabel.setForeground(new Color(255, 215, 0)); // Gold color
+    xpLabel.setFont(new Font(xpLabel.getFont().getName(), Font.BOLD, 10));
+    xpLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+    panel.add(xpLabel, BorderLayout.NORTH);
+
+    // Add status overlay
+    if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null &&
+            tile.getSubmission().getStatus() != TileSubmissionType.NOT_SUBMITTED) {
+        addStatusOverlay(panel, tile.getSubmission());
+    }
+
+    // Add click behavior
+    addTilePanelListeners(panel, tile);
+
+    return panel;
+}
+
+// Create a detailed HTML tooltip for the tile
+private String createDetailedTooltip(Tile tile) {
+    StringBuilder tooltip = new StringBuilder();
+    tooltip.append("<html><body style='width: 250px'>");
+
+    // Title with weight
+    tooltip.append("<div style='font-weight: bold; font-size: 12pt;'>")
+           .append(tile.getTitle())
+           .append(" (")
+           .append(tile.getWeight())
+           .append(" XP)</div>");
+
+    // Description if available
+    if (tile.getDescription() != null && !tile.getDescription().isEmpty()) {
+        tooltip.append("<div style='margin-top: 5px;'>")
+               .append(tile.getDescription())
+               .append("</div>");
+    }
+
+    // Add submission status if available
+    if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null) {
+        String statusText = getStatusText(tile.getSubmission().getStatus());
+        String statusColor = getStatusHexColor(tile.getSubmission().getStatus());
+
+        tooltip.append("<div style='margin-top: 8px;'><b>Status:</b> ")
+               .append("<span style='color: ")
+               .append(statusColor)
+               .append(";'>")
+               .append(statusText)
+               .append("</span></div>");
+
+        // Show submission count if any
+        if (tile.getSubmission().getSubmissionCount() > 0) {
+            tooltip.append("<div><b>Submissions:</b> ")
+                   .append(tile.getSubmission().getSubmissionCount())
+                   .append("</div>");
+        }
+
+        // Show last update time if available
+        if (tile.getSubmission().getLastUpdated() != null) {
+            SimpleDateFormat dateFormat = new SimpleDateFormat("MMM dd, yyyy HH:mm");
+            tooltip.append("<div><b>Last updated:</b> ")
+                   .append(dateFormat.format(tile.getSubmission().getLastUpdated()))
+                   .append("</div>");
+        }
+    }
+
+    // Goal information
+    if (tile.getGoals() != null && !tile.getGoals().isEmpty()) {
+        tooltip.append("<div style='margin-top: 5px;'><b>Goals:</b></div><ul style='margin-top: 2px; margin-left: 15px; padding-left: 0px;'>");
+        for (Goal goal : tile.getGoals()) {
+            tooltip.append("<li>")
+                   .append(goal.getDescription())
+                   .append(": ")
+                   .append(goal.getTargetValue())
+                   .append("</li>");
+        }
+        tooltip.append("</ul>");
+    }
+
+    tooltip.append("</body></html>");
+    return tooltip.toString();
+}
+
+// Get background color based on submission status
+private Color getTileBackgroundColor(TileSubmission submission) {
+    if (submission == null || submission.getStatus() == null ||
+            submission.getStatus() == TileSubmissionType.NOT_SUBMITTED) {
+        return ColorScheme.DARK_GRAY_COLOR;
+    }
+
+    switch (submission.getStatus()) {
+        case PENDING:
+            return new Color(30, 64, 122); // Darker blue
+        case ACCEPTED:
+            return new Color(17, 99, 47);  // Darker green
+        case REQUIRES_INTERACTION:
+            return new Color(117, 89, 4);  // Darker yellow/gold
+        case DECLINED:
+            return new Color(120, 34, 34); // Darker red
+        default:
+            return ColorScheme.DARK_GRAY_COLOR;
+    }
+}
+
+// Get border color based on submission status
+private Color getTileBorderColor(TileSubmission submission) {
+    if (submission == null || submission.getStatus() == null)
+        return ColorScheme.BORDER_COLOR;
+
+    switch (submission.getStatus()) {
+        case PENDING:
+            return new Color(59, 130, 246); // Blue
+        case ACCEPTED:
+            return new Color(34, 197, 94);  // Green
+        case REQUIRES_INTERACTION:
+            return new Color(234, 179, 8);  // Yellow
+        case DECLINED:
+            return new Color(239, 68, 68);  // Red
+        default:
+            return ColorScheme.BORDER_COLOR;
+    }
+}
+
+// Get hex color for tooltip based on submission status
+private String getStatusHexColor(TileSubmissionType status) {
+    switch (status) {
+        case PENDING:
+            return "#3b82f6"; // Blue
+        case ACCEPTED:
+            return "#22c55e"; // Green
+        case REQUIRES_INTERACTION:
+            return "#eab308"; // Yellow
+        case DECLINED:
+            return "#ef4444"; // Red
+        default:
+            return "#ffffff"; // White
+    }
+}
 
     private void addStatusOverlay(JPanel panel, TileSubmission submission) {
         JPanel overlayPanel = new JPanel(new BorderLayout());
@@ -257,24 +379,6 @@ public class BingoBoardWindow extends JFrame {
                 panel.setBackground(originalColor);
             }
         });
-    }
-
-    private Color getTileBorderColor(TileSubmission submission) {
-        if (submission == null || submission.getStatus() == null)
-            return ColorScheme.BORDER_COLOR;
-
-        switch (submission.getStatus()) {
-            case PENDING:
-                return new Color(59, 130, 246);
-            case ACCEPTED:
-                return new Color(34, 197, 94);
-            case REQUIRES_INTERACTION:
-                return new Color(234, 179, 8);
-            case DECLINED:
-                return new Color(239, 68, 68);
-            default:
-                return ColorScheme.BORDER_COLOR;
-        }
     }
 
     private void loadTileImage(JPanel panel, Tile tile, int tileSize) {
