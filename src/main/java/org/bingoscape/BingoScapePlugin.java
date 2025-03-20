@@ -96,6 +96,7 @@ public class BingoScapePlugin extends Plugin {
 
     // State
     private final List<EventData> activeEvents = new CopyOnWriteArrayList<>();
+    @Getter
     private EventData currentEvent;
     @Getter
     private Bingo currentBingo;
