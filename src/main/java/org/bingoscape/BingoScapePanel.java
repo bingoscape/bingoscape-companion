@@ -3,6 +3,7 @@ package org.bingoscape;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
+import net.runelite.client.util.ImageUtil;
 import org.bingoscape.models.Bingo;
 import org.bingoscape.models.EventData;
 import org.bingoscape.models.Role;
@@ -14,6 +15,7 @@ import javax.swing.border.CompoundBorder;
 import javax.swing.border.MatteBorder;
 
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
@@ -37,6 +39,7 @@ public class BingoScapePanel extends PluginPanel {
     private final JComboBox<EventData> eventSelector = new JComboBox<>();
     private final JComboBox<Bingo> bingoSelector = new JComboBox<>();
     private final JButton showBingoBoardButton;
+    private final JButton reloadEventsButton; // New reload events button
 
     // Reference to plugin and other resources
     private final BingoScapePlugin plugin;
@@ -61,6 +64,9 @@ public class BingoScapePanel extends PluginPanel {
         // Create show bingo board button
         showBingoBoardButton = createShowBingoBoardButton();
 
+        // Create reload events button
+        reloadEventsButton = createReloadEventsButton();
+
         // Setup all panels
         setupEventsPanel();
         setupBingoPanel();
@@ -81,9 +87,16 @@ public class BingoScapePanel extends PluginPanel {
         eventsPanel.setBorder(new EmptyBorder(0, 0, COMPONENT_SPACING, 0));
         eventsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+        // Create a header panel that contains the label and reload button
+        JPanel headerPanel = new JPanel(new BorderLayout(COMPONENT_SPACING, 0));
+        headerPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
         JLabel eventsLabel = new JLabel("Select an Event:");
         eventsLabel.setForeground(Color.WHITE);
-        eventsPanel.add(eventsLabel, BorderLayout.NORTH);
+        headerPanel.add(reloadEventsButton, BorderLayout.EAST);
+        headerPanel.add(eventsLabel, BorderLayout.WEST);
+
+        eventsPanel.add(headerPanel, BorderLayout.NORTH);
 
         configureEventSelector();
         eventsPanel.add(eventSelector, BorderLayout.CENTER);
@@ -133,6 +146,45 @@ public class BingoScapePanel extends PluginPanel {
                 executor.submit(() -> plugin.setEventDetails(selectedEvent));
             }
         };
+    }
+
+    private JButton createReloadEventsButton() {
+        JButton button = new JButton();
+        button.setIcon(new ImageIcon(getClass().getResource("/refresh_icon.png")));
+        button.setToolTipText("Reload Events");
+        button.setPreferredSize(new Dimension(24, 24));
+        button.setMaximumSize(new Dimension(24, 24));
+        button.setMinimumSize(new Dimension(24, 24));
+        button.setFocusPainted(false);
+        button.setContentAreaFilled(false);
+        button.setForeground(Color.WHITE);
+
+        // Add hover effect
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setContentAreaFilled(true);
+                button.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setContentAreaFilled(false);
+            }
+        });
+
+        // Connect to plugin's fetchActiveEvents method
+        button.addActionListener(e -> {
+            reloadEventsButton.setEnabled(false);
+            executor.submit(() -> {
+                plugin.fetchActiveEvents();
+                SwingUtilities.invokeLater(() -> {
+                    reloadEventsButton.setEnabled(true);
+                });
+            });
+        });
+
+        return button;
     }
 
     private void setupBingoPanel() {

@@ -710,6 +710,11 @@ public class BingoBoardWindow extends JFrame {
             submitButton.setEnabled(false);
         }
 
+        if (currentBingo.isLocked()) {
+            submitButton.setText("Submissions locked");
+            submitButton.setEnabled(false);
+        }
+
         cancelButton.addActionListener(e -> dialog.dispose());
         submitButton.addActionListener(e -> {
             dialog.dispose();
