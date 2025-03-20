@@ -6,6 +6,7 @@ import net.runelite.client.ui.FontManager;
 import org.bingoscape.models.Bingo;
 import org.bingoscape.models.EventData;
 import org.bingoscape.models.Role;
+import org.bingoscape.models.TeamMember;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -318,6 +319,7 @@ public class BingoScapePanel extends PluginPanel {
         });
     }
 
+    // Method to update event details with enhanced information
     public void updateEventDetails(EventData event) {
         SwingUtilities.invokeLater(() -> {
             // Clear previous event details
@@ -330,6 +332,14 @@ public class BingoScapePanel extends PluginPanel {
                 JPanel detailsContent = new JPanel();
                 detailsContent.setLayout(new BoxLayout(detailsContent, BoxLayout.Y_AXIS));
                 detailsContent.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+                // Title with proper styling
+                JLabel titleLabel = new JLabel(event.getTitle());
+                titleLabel.setFont(FontManager.getRunescapeBoldFont());
+                titleLabel.setForeground(Color.WHITE);
+                titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                titleLabel.setBorder(new EmptyBorder(0, 0, COMPONENT_SPACING, 0));
+                detailsContent.add(titleLabel);
 
                 // Event description
                 if (event.getDescription() != null && !event.getDescription().isEmpty()) {
@@ -345,69 +355,83 @@ public class BingoScapePanel extends PluginPanel {
                 }
 
                 // Event dates
-                JPanel datesPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-                datesPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-                if (event.getStartDate() != null && event.getEndDate() != null) {
-                    JLabel datesLabel = new JLabel(
-                            "Event dates: " + DATE_FORMAT.format(event.getStartDate()) +
-                                    " - " + DATE_FORMAT.format(event.getEndDate())
-                    );
-                    datesLabel.setForeground(Color.LIGHT_GRAY);
-                    datesPanel.add(datesLabel);
-                }
-
+                JPanel datesPanel = createInfoRow("Event dates: " +
+                        DATE_FORMAT.format(event.getStartDate()) + " - " +
+                        DATE_FORMAT.format(event.getEndDate()));
                 detailsContent.add(datesPanel);
 
-                // Prize pool info if available
+                // Prize pool info
                 if (event.getBasePrizePool() > 0) {
-                    JPanel prizePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-                    prizePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-                    long prizeInMillions = event.getBasePrizePool() / 1_000_000;
-                    JLabel prizeLabel = new JLabel("Prize pool: " + prizeInMillions + "M GP");
-                    prizeLabel.setForeground(Color.LIGHT_GRAY);
-                    prizePanel.add(prizeLabel);
-
+                    String prizeText = formatGpAmount(event.getBasePrizePool());
+                    JPanel prizePanel = createInfoRow("Prize pool: " + prizeText);
                     detailsContent.add(prizePanel);
-                }
 
-                // User role and team info
-                JPanel userInfoPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-                userInfoPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-                // Role
-                if (event.getRole() != null) {
-                    JLabel roleLabel = new JLabel("Role: " + formatRole(event.getRole()));
-                    roleLabel.setForeground(Color.LIGHT_GRAY);
-                    userInfoPanel.add(roleLabel);
-                }
-
-                // Team
-                if (event.getUserTeam() != null) {
-                    JLabel teamLabel = new JLabel("  Team: " + event.getUserTeam().getName());
-                    teamLabel.setForeground(Color.LIGHT_GRAY);
-                    userInfoPanel.add(teamLabel);
-
-                    if (event.getUserTeam().isLeader()) {
-                        JLabel leaderLabel = new JLabel(" (Team Leader)");
-                        leaderLabel.setForeground(new Color(255, 215, 0)); // Gold color for leader
-                        userInfoPanel.add(leaderLabel);
+                    // Add minimum buy-in if applicable
+                    if (event.getMinimumBuyIn() > 0) {
+                        String buyInText = formatGpAmount(event.getMinimumBuyIn());
+                        JPanel buyInPanel = createInfoRow("Minimum buy-in: " + buyInText);
+                        detailsContent.add(buyInPanel);
                     }
                 }
 
-                detailsContent.add(userInfoPanel);
+                // User role
+                if (event.getRole() != null) {
+                    JPanel rolePanel = createInfoRow("Role: " + formatRole(event.getRole()));
+                    detailsContent.add(rolePanel);
+                }
 
                 // Clan info
                 if (event.getClan() != null) {
-                    JPanel clanPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-                    clanPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-                    JLabel clanLabel = new JLabel("Clan: " + event.getClan().getName());
-                    clanLabel.setForeground(Color.LIGHT_GRAY);
-                    clanPanel.add(clanLabel);
-
+                    JPanel clanPanel = createInfoRow("Clan: " + event.getClan().getName());
                     detailsContent.add(clanPanel);
+                }
+
+                // Team information (enhanced with member list)
+                if (event.getUserTeam() != null) {
+                    // Add team name
+                    JPanel teamPanel = createInfoRow("Team: " + event.getUserTeam().getName());
+                    detailsContent.add(teamPanel);
+
+                    // Add team members list with leader indicator
+                    if (event.getUserTeam().getMembers() != null && !event.getUserTeam().getMembers().isEmpty()) {
+                        JPanel membersPanel = new JPanel();
+                        membersPanel.setLayout(new BoxLayout(membersPanel, BoxLayout.Y_AXIS));
+                        membersPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                        membersPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 10, 0, 0));
+                        membersPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+                        JLabel membersLabel = new JLabel("Team Members:");
+                        membersLabel.setForeground(Color.LIGHT_GRAY);
+                        membersLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                        membersPanel.add(membersLabel);
+
+                        for (TeamMember member : event.getUserTeam().getMembers()) {
+                            String memberText = "• " + member.getRunescapeName();
+                            if (member.isLeader()) {
+                                memberText += " (Leader)";
+                            }
+
+                            JLabel memberLabel = new JLabel(memberText);
+                            memberLabel.setForeground(member.isLeader() ?
+                                    new Color(255, 215, 0) : Color.WHITE); // Gold color for leader
+                            memberLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                            membersPanel.add(memberLabel);
+                        }
+
+                        detailsContent.add(membersPanel);
+                    }
+                }
+
+                // Status information
+                JPanel statusPanel = createInfoRow("Status: " +
+                        (event.isLocked() ? "Locked" : "Active"));
+                detailsContent.add(statusPanel);
+
+                // Available bingos count
+                if (event.getBingos() != null) {
+                    JPanel bingoCountPanel = createInfoRow("Available boards: " +
+                            event.getBingos().size());
+                    detailsContent.add(bingoCountPanel);
                 }
 
                 eventDetailsPanel.add(detailsContent);
@@ -430,6 +454,32 @@ public class BingoScapePanel extends PluginPanel {
             revalidate();
             repaint();
         });
+    }
+
+    // Helper method to create consistent info rows
+    private JPanel createInfoRow(String text) {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        panel.setBorder(new EmptyBorder(2, 0, 2, 0));
+
+        JLabel label = new JLabel(text);
+        label.setForeground(Color.LIGHT_GRAY);
+        panel.add(label);
+
+        return panel;
+    }
+
+    // Helper method to format GP amounts nicely
+    private String formatGpAmount(long amount) {
+        if (amount >= 1_000_000_000) {
+            return (amount / 1_000_000_000) + "B GP";
+        } else if (amount >= 1_000_000) {
+            return (amount / 1_000_000) + "M GP";
+        } else if (amount >= 1_000) {
+            return (amount / 1_000) + "K GP";
+        } else {
+            return amount + " GP";
+        }
     }
 
     private String formatRole(Role role) {
