@@ -30,6 +30,7 @@ public class BingoScapePanel extends PluginPanel {
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy");
 
     // Components
+    private final JPanel mainContentPanel = new JPanel(); // Main container for all content
     private final JPanel eventsPanel = new JPanel();
     private final JPanel bingoPanel = new JPanel();
     private final JPanel eventDetailsPanel = new JPanel();
@@ -52,21 +53,25 @@ public class BingoScapePanel extends PluginPanel {
         setBorder(new EmptyBorder(BORDER_SPACING, BORDER_SPACING, BORDER_SPACING, BORDER_SPACING));
         setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-
-        // Setup Events Panel
-
-        // Setup Event Details Panel
+        // Main content panel setup
+        mainContentPanel.setLayout(new BoxLayout(mainContentPanel, BoxLayout.Y_AXIS));
+        mainContentPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        add(mainContentPanel, BorderLayout.NORTH);
 
         // Create show bingo board button
         showBingoBoardButton = createShowBingoBoardButton();
 
-        // Setup Bingo Panel
-
-        // Add panels to main panel
-//        add(apiKeyPanel, BorderLayout.NORTH);
+        // Setup all panels
         setupEventsPanel();
         setupBingoPanel();
         setupEventDetailsPanel();
+
+        // Add panels to main content panel
+        mainContentPanel.add(eventsPanel);
+        mainContentPanel.add(bingoPanel);
+        mainContentPanel.add(eventDetailsPanel);
+
+        // Initially hide the bingo panel
         bingoPanel.setVisible(false);
     }
 
@@ -74,6 +79,7 @@ public class BingoScapePanel extends PluginPanel {
         eventsPanel.setLayout(new BorderLayout(0, COMPONENT_SPACING));
         eventsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
         eventsPanel.setBorder(new EmptyBorder(0, 0, COMPONENT_SPACING, 0));
+        eventsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel eventsLabel = new JLabel("Select an Event:");
         eventsLabel.setForeground(Color.WHITE);
@@ -81,12 +87,13 @@ public class BingoScapePanel extends PluginPanel {
 
         configureEventSelector();
         eventsPanel.add(eventSelector, BorderLayout.CENTER);
-        add(eventsPanel, BorderLayout.CENTER);
     }
 
     private void setupEventDetailsPanel() {
         eventDetailsPanel.setLayout(new BoxLayout(eventDetailsPanel, BoxLayout.Y_AXIS));
-        add(eventDetailsPanel, BorderLayout.SOUTH);
+        eventDetailsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        eventDetailsPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 0, 0, 0));
+        eventDetailsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
     }
 
     private void configureEventSelector() {
@@ -130,8 +137,9 @@ public class BingoScapePanel extends PluginPanel {
 
     private void setupBingoPanel() {
         bingoPanel.setLayout(new BorderLayout(0, COMPONENT_SPACING));
-        bingoPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 0, 0, 0));
+        bingoPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 0, COMPONENT_SPACING, 0));
         bingoPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        bingoPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JPanel bingoHeaderPanel = new JPanel(new BorderLayout());
         bingoHeaderPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -150,8 +158,6 @@ public class BingoScapePanel extends PluginPanel {
         buttonPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 0, 0, 0));
         buttonPanel.add(showBingoBoardButton, BorderLayout.CENTER);
         bingoPanel.add(buttonPanel, BorderLayout.CENTER);
-
-        add(bingoPanel, BorderLayout.CENTER);
     }
 
     private void configureBingoSelector() {
@@ -231,9 +237,21 @@ public class BingoScapePanel extends PluginPanel {
             eventSelector.removeAllItems();
 
             if (events == null || events.isEmpty()) {
-                JLabel noEventsLabel = new JLabel(NO_EVENTS_TEXT);
-                noEventsLabel.setForeground(Color.LIGHT_GRAY);
-                eventsPanel.add(noEventsLabel, BorderLayout.SOUTH);
+                // Check if "no events" label already exists
+                boolean hasNoEventsLabel = false;
+                for (Component c : eventsPanel.getComponents()) {
+                    if (c instanceof JLabel && NO_EVENTS_TEXT.equals(((JLabel) c).getText())) {
+                        hasNoEventsLabel = true;
+                        break;
+                    }
+                }
+
+                if (!hasNoEventsLabel) {
+                    JLabel noEventsLabel = new JLabel(NO_EVENTS_TEXT);
+                    noEventsLabel.setForeground(Color.LIGHT_GRAY);
+                    eventsPanel.add(noEventsLabel, BorderLayout.SOUTH);
+                }
+
                 eventDetailsPanel.setVisible(false);
                 bingoPanel.setVisible(false);
                 return;
@@ -264,10 +282,13 @@ public class BingoScapePanel extends PluginPanel {
 
             // Build event details panel
             if (event != null) {
-                // Set up the event details panel
+                // Create a scrollable panel for event details to handle overflow
                 JPanel detailsContent = new JPanel();
                 detailsContent.setLayout(new BoxLayout(detailsContent, BoxLayout.Y_AXIS));
                 detailsContent.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+                // Make sure the details content has proper alignment
+                detailsContent.setAlignmentX(Component.LEFT_ALIGNMENT);
 
                 // Title with proper styling
                 JLabel titleLabel = new JLabel(event.getTitle());
@@ -370,12 +391,19 @@ public class BingoScapePanel extends PluginPanel {
                     detailsContent.add(bingoCountPanel);
                 }
 
-//                eventDetailsPanel.setBackground(new Color(255,0,0));
-                eventDetailsPanel.add(detailsContent);
-                detailsContent.setVisible(true);
+                // Add the details content to a scrollable pane
+                JScrollPane scrollPane = new JScrollPane(detailsContent);
+                scrollPane.setBorder(null);
+                scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+                scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+                scrollPane.setAlignmentX(Component.LEFT_ALIGNMENT);
+                scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+                scrollPane.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+                eventDetailsPanel.add(scrollPane);
                 eventDetailsPanel.setVisible(true);
 
-                // Populate bingo selector
+                // Populate bingo selector and show bingo panel
                 if (event.getBingos() != null && !event.getBingos().isEmpty()) {
                     for (Bingo bingo : event.getBingos()) {
                         bingoSelector.addItem(bingo);
@@ -389,6 +417,7 @@ public class BingoScapePanel extends PluginPanel {
                 bingoPanel.setVisible(false);
             }
 
+            // Validate and repaint the entire panel
             revalidate();
             repaint();
         });
@@ -399,6 +428,7 @@ public class BingoScapePanel extends PluginPanel {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
         panel.setBorder(new EmptyBorder(2, 0, 2, 0));
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JLabel label = new JLabel(text);
         label.setForeground(Color.LIGHT_GRAY);
