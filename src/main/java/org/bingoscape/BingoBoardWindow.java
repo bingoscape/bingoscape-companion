@@ -41,7 +41,13 @@ public class BingoBoardWindow extends JFrame {
         this.executor = Executors.newFixedThreadPool(IMAGE_LOADING_THREADS);
 
         // Window setup
-        setTitle("BingoScape - " + bingo.getTitle());
+        // Window setup
+        String windowTitle = "BingoScape - " + bingo.getTitle();
+        // Add codephrase to title if available
+        if (bingo.getCodephrase() != null && !bingo.getCodephrase().isEmpty()) {
+            windowTitle += " | Codephrase: " + bingo.getCodephrase();
+        }
+        setTitle(windowTitle);
         setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
         setResizable(true); // Allow resizing for better image viewing
         setLocationRelativeTo(null);
@@ -87,8 +93,12 @@ public class BingoBoardWindow extends JFrame {
     public void updateBingoBoard(Bingo bingo) {
         this.currentBingo = bingo;
         SwingUtilities.invokeLater(() -> {
-            setTitle("BingoScape - " + bingo.getTitle());
-            titleLabel.setText(bingo.getTitle());
+            String windowTitle = "BingoScape - " + bingo.getTitle();
+            // Add codephrase to title if available
+            if (bingo.getCodephrase() != null && !bingo.getCodephrase().isEmpty()) {
+                windowTitle += " | Codephrase: " + bingo.getCodephrase();
+            }
+            titleLabel.setText(windowTitle);
             updateGridLayout(bingo);
             displayBingoBoard(bingo);
         });

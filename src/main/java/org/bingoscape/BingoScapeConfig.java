@@ -44,5 +44,14 @@ public interface BingoScapeConfig extends Config
     {
         return true;
     }
-}
 
+    @ConfigItem(
+            keyName = "showCodephraseOverlay",
+            name = "Show Bingo Codephrase Overlay",
+            description = "Display the codephrase for the currently selected bingo as an overlay"
+    )
+    default boolean showCodephraseOverlay()
+    {
+        return true;
+    }
+}
