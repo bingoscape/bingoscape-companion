@@ -247,11 +247,16 @@ public class BingoScapePlugin extends Plugin {
             }
 
             @Override
-            public void onResponse(Call call, Response response) {
-                try {
+            public void onResponse(Call call, Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    String stringBody = responseBody.string();
                     if (!response.isSuccessful()) {
-                        log.error("Unsuccessful submission response: " + response);
-                        showErrorMessage("Failed to submit tile completion to BingoScape.");
+                        ErrorResponse errorResponse = gson.fromJson(stringBody, ErrorResponse.class);
+                        log.error("Unsuccessful submission response: {}", errorResponse.getError());
+                        showErrorMessage(errorResponse.getError());
+                        if (response.code() == 423) { // 423 Locked
+                            refreshBingoBoard();
+                        }
                         return;
                     }
 
@@ -259,7 +264,8 @@ public class BingoScapePlugin extends Plugin {
 
                     // Refresh the current bingo board with updated tile statuses
                     if (currentBingo != null) {
-                        refreshBingoBoard(currentBingo);
+                        Bingo updatedBingo = gson.fromJson(stringBody, Bingo.class);
+                        updateCurrentBingoAndPanel(updatedBingo);
                     }
                 } finally {
                     response.close();
@@ -269,22 +275,54 @@ public class BingoScapePlugin extends Plugin {
     }
 
     // Add this new method to handle refreshing the bingo board:
-    private void refreshBingoBoard(Bingo bingo) {
-        // Fetch the latest tile status data
-        executor.submit(() -> {
-            // Update the current bingo board window with fresh data
-            panel.displayBingoBoard(bingo);
+    private void refreshBingoBoard() {
+        if (currentBingo == null || !hasApiKey()) {
+            return;
+        }
+
+        String apiUrl = config.apiBaseUrl() + "/api/runelite/bingos/" + currentBingo.getId();
+
+        Request request = new Request.Builder()
+                .url(apiUrl)
+                .header("Authorization", "Bearer " + config.apiKey())
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                log.error("Failed to refresh bingo board", e);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful() || responseBody == null) {
+                        log.error("Unsuccessful response when refreshing bingo: " + response);
+                        return;
+                    }
+
+                    String jsonData = responseBody.string();
+                    Bingo updatedBingo = gson.fromJson(jsonData, Bingo.class);
+
+                    updateCurrentBingoAndPanel(updatedBingo);
+                }
+            }
         });
+    }
+
+    private void updateCurrentBingoAndPanel(Bingo updatedBingo) {
+        currentBingo = updatedBingo;
+        panel.displayBingoBoard(updatedBingo);
     }
 
     private void showErrorMessage(String message) {
         clientThread.invokeLater(() ->
-                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null));
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "BingoScape: " + message, null));
     }
 
     private void showSuccessMessage(String message) {
         clientThread.invokeLater(() ->
-                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null));
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "BingoScape: " + message, null));
     }
 
     private boolean hasApiKey() {
