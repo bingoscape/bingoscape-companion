@@ -311,6 +311,9 @@ public class BingoScapePlugin extends Plugin {
     }
 
     private void updateCurrentBingoAndPanel(Bingo updatedBingo) {
+        for(EventData e : activeEvents) {
+            e.getBingos().replaceAll(b -> b.getId().equals(updatedBingo.getId()) ? updatedBingo : b);
+        }
         currentBingo = updatedBingo;
         panel.displayBingoBoard(updatedBingo);
     }
