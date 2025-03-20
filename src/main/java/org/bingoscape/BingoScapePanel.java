@@ -256,7 +256,6 @@ public class BingoScapePanel extends PluginPanel {
             if (selectedBingo != null) {
                 // Update the current bingo in the plugin first to ensure the overlay gets updated
                 plugin.selectBingo(selectedBingo);
-                showBingoBoardWindow(selectedBingo);
             }
         };
     }

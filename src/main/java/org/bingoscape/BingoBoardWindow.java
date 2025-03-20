@@ -47,6 +47,7 @@ public class BingoBoardWindow extends JFrame {
         if (bingo.getCodephrase() != null && !bingo.getCodephrase().isEmpty()) {
             windowTitle += " | Codephrase: " + bingo.getCodephrase();
         }
+
         setTitle(windowTitle);
         setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
         setResizable(true); // Allow resizing for better image viewing

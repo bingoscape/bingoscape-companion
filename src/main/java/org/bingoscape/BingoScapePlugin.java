@@ -87,10 +87,12 @@ public class BingoScapePlugin extends Plugin {
     @Inject
     private ScheduledExecutorService executor;
 
+    @Inject
+    private Gson gson;
+
     // Plugin components
     private NavigationButton navButton;
     private BingoScapePanel panel;
-    private final Gson gson = new GsonBuilder().create();
 
     // State
     private final List<EventData> activeEvents = new CopyOnWriteArrayList<>();
@@ -149,11 +151,6 @@ public class BingoScapePlugin extends Plugin {
                 setEventDetails(currentEvent);
             }
         }
-    }
-
-    public void setApiKey(String apiKey) {
-        config.apiKey(apiKey);
-        fetchActiveEvents();
     }
 
     public void fetchActiveEvents() {
