@@ -52,8 +52,15 @@ public class BingoCodephraseOverlay extends OverlayPanel {
 
         // Add title
         panelComponent.getChildren().add(TitleComponent.builder()
-                .text("BingoScape")
+                .text(plugin.getCurrentEvent().getTitle())
                 .color(new Color(255, 215, 0)) // Gold color
+                .build());
+
+        // Add board
+        panelComponent.getChildren().add(LineComponent.builder()
+                .left("Board:")
+                .right(currentBingo.getTitle())
+                .rightColor(Color.WHITE)
                 .build());
 
         // Add codephrase
