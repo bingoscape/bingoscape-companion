@@ -294,7 +294,7 @@ public class BingoScapePlugin extends Plugin {
     }
 
     // Add this new method to handle refreshing the bingo board:
-    private void refreshBingoBoard() {
+    public void refreshBingoBoard() {
         if (currentBingo == null || !hasApiKey()) {
             return;
         }
