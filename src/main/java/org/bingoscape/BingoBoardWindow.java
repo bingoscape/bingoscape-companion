@@ -60,12 +60,60 @@ public class BingoBoardWindow extends JFrame {
         contentPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
         // Title setup
+        JPanel titlePanel = new JPanel(new BorderLayout());
+        titlePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        titlePanel.setBorder(new EmptyBorder(0, 0, PADDING, 0));
+        
         titleLabel = new JLabel(bingo.getTitle());
         titleLabel.setFont(FontManager.getRunescapeBoldFont());
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        titleLabel.setBorder(new EmptyBorder(0, 0, PADDING, 0));
-        contentPanel.add(titleLabel, BorderLayout.NORTH);
+        titlePanel.add(titleLabel, BorderLayout.CENTER);
+
+        // Add reload button
+        JButton reloadButton = new JButton();
+        reloadButton.setIcon(new ImageIcon(getClass().getResource("/refresh_icon.png")));
+        reloadButton.setToolTipText("Reload Board");
+        reloadButton.setPreferredSize(new Dimension(24, 24));
+        reloadButton.setMaximumSize(new Dimension(24, 24));
+        reloadButton.setMinimumSize(new Dimension(24, 24));
+        reloadButton.setFocusPainted(false);
+        reloadButton.setContentAreaFilled(false);
+        reloadButton.setForeground(Color.WHITE);
+        reloadButton.setBorder(new EmptyBorder(0, 5, 0, 5));
+
+        // Create a container panel for the button to ensure proper spacing
+        JPanel buttonContainer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        buttonContainer.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        buttonContainer.add(reloadButton);
+
+        // Add hover effect
+        reloadButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                if (reloadButton.isEnabled()) {
+                    reloadButton.setContentAreaFilled(true);
+                    reloadButton.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+                }
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                reloadButton.setContentAreaFilled(false);
+            }
+        });
+
+        // Add reload action
+        reloadButton.addActionListener(e -> {
+            reloadButton.setEnabled(false);
+            executor.submit(() -> {
+                plugin.refreshBingoBoard();
+                SwingUtilities.invokeLater(() -> reloadButton.setEnabled(true));
+            });
+        });
+
+        titlePanel.add(buttonContainer, BorderLayout.EAST);
+        contentPanel.add(titlePanel, BorderLayout.NORTH);
 
         // Bingo board setup
         bingoBoard = new JPanel();

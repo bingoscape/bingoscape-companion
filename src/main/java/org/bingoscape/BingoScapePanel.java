@@ -40,6 +40,8 @@ public class BingoScapePanel extends PluginPanel {
     private final JComboBox<Bingo> bingoSelector = new JComboBox<>();
     private final JButton showBingoBoardButton;
     private final JButton reloadEventsButton; // New reload events button
+    private final JLabel loadingLabel; // New loading label
+    private final Timer fadeTimer; // Timer for smooth transitions
 
     // Reference to plugin and other resources
     private final BingoScapePlugin plugin;
@@ -50,6 +52,10 @@ public class BingoScapePanel extends PluginPanel {
         super();
         this.plugin = plugin;
         this.executor = Executors.newSingleThreadScheduledExecutor();
+
+        // Initialize fade timer
+        this.fadeTimer = new Timer(50, null);
+        fadeTimer.setRepeats(true);
 
         // Panel setup
         setLayout(new BorderLayout());
@@ -64,8 +70,9 @@ public class BingoScapePanel extends PluginPanel {
         // Create show bingo board button
         showBingoBoardButton = createShowBingoBoardButton();
 
-        // Create reload events button
+        // Create reload events button and loading label
         reloadEventsButton = createReloadEventsButton();
+        loadingLabel = createLoadingLabel();
 
         // Setup all panels
         setupEventsPanel();
@@ -81,6 +88,13 @@ public class BingoScapePanel extends PluginPanel {
         bingoPanel.setVisible(false);
     }
 
+    private JLabel createLoadingLabel() {
+        JLabel label = new JLabel("Loading events...");
+        label.setForeground(Color.LIGHT_GRAY);
+        label.setVisible(false);
+        return label;
+    }
+
     private void setupEventsPanel() {
         eventsPanel.setLayout(new BorderLayout(0, COMPONENT_SPACING));
         eventsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -93,7 +107,14 @@ public class BingoScapePanel extends PluginPanel {
 
         JLabel eventsLabel = new JLabel("Select an Event:");
         eventsLabel.setForeground(Color.WHITE);
-        headerPanel.add(reloadEventsButton, BorderLayout.EAST);
+        
+        // Create a button panel to hold both the reload button and loading label
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        buttonPanel.add(loadingLabel);
+        buttonPanel.add(reloadEventsButton);
+        
+        headerPanel.add(buttonPanel, BorderLayout.EAST);
         headerPanel.add(eventsLabel, BorderLayout.WEST);
 
         eventsPanel.add(headerPanel, BorderLayout.NORTH);
@@ -163,8 +184,10 @@ public class BingoScapePanel extends PluginPanel {
         button.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseEntered(java.awt.event.MouseEvent evt) {
-                button.setContentAreaFilled(true);
-                button.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+                if (button.isEnabled()) {
+                    button.setContentAreaFilled(true);
+                    button.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+                }
             }
 
             @Override
@@ -173,15 +196,73 @@ public class BingoScapePanel extends PluginPanel {
             }
         });
 
-        // Connect to plugin's fetchActiveEvents method
+        // Connect to plugin's fetchActiveEvents method with smooth transition
         button.addActionListener(e -> {
             reloadEventsButton.setEnabled(false);
-            executor.submit(() -> {
-                plugin.fetchActiveEvents();
-                SwingUtilities.invokeLater(() -> {
-                    reloadEventsButton.setEnabled(true);
-                });
+            loadingLabel.setVisible(true);
+            eventSelector.setEnabled(false);
+            
+            // Store current selections
+            EventData selectedEvent = (EventData) eventSelector.getSelectedItem();
+            Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
+            String selectedEventId = selectedEvent != null ? selectedEvent.getId().toString() : null;
+            String selectedBingoId = selectedBingo != null ? selectedBingo.getId().toString() : null;
+            
+            // Start fade out animation
+            for (ActionListener listener : fadeTimer.getActionListeners()) {
+                fadeTimer.removeActionListener(listener);
+            }
+            fadeTimer.addActionListener(evt -> {
+                float alpha = eventSelector.getForeground().getAlpha() - 10;
+                if (alpha <= 0) {
+                    fadeTimer.stop();
+                    executor.submit(() -> {
+                        plugin.fetchActiveEvents();
+                        SwingUtilities.invokeLater(() -> {
+                            reloadEventsButton.setEnabled(true);
+                            loadingLabel.setVisible(false);
+                            eventSelector.setEnabled(true);
+                            
+                            // Restore selections if they still exist
+                            if (selectedEventId != null) {
+                                for (int i = 0; i < eventSelector.getItemCount(); i++) {
+                                    EventData event = eventSelector.getItemAt(i);
+                                    if (event.getId().toString().equals(selectedEventId)) {
+                                        eventSelector.setSelectedIndex(i);
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if (selectedBingoId != null) {
+                                for (int i = 0; i < bingoSelector.getItemCount(); i++) {
+                                    Bingo bingo = bingoSelector.getItemAt(i);
+                                    if (bingo.getId().toString().equals(selectedBingoId)) {
+                                        bingoSelector.setSelectedIndex(i);
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // Start fade in animation
+                            for (ActionListener listener : fadeTimer.getActionListeners()) {
+                                fadeTimer.removeActionListener(listener);
+                            }
+                            fadeTimer.addActionListener(evt2 -> {
+                                float fadeInAlpha = eventSelector.getForeground().getAlpha() + 10;
+                                if (fadeInAlpha >= 255) {
+                                    fadeTimer.stop();
+                                }
+                                eventSelector.setForeground(new Color(255, 255, 255, (int)fadeInAlpha));
+                            });
+                            fadeTimer.start();
+                        });
+                    });
+                } else {
+                    eventSelector.setForeground(new Color(255, 255, 255, (int)alpha));
+                }
             });
+            fadeTimer.start();
         });
 
         return button;
