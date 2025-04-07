@@ -554,18 +554,33 @@ public class BingoBoardWindow extends JFrame {
 
     private void showSubmissionDialog(Tile tile) {
         JDialog dialog = new JDialog(this, "Tile Details", true);
-        dialog.setSize(450, 250);
-        dialog.setLocationRelativeTo(this);
+        dialog.setMinimumSize(new Dimension(450, 300));
         dialog.setLayout(new BorderLayout());
 
-        // Main panel - split into info and image
+        // Main panel with scroll support
         JPanel mainPanel = createTileDetailsPanel(tile);
+        JScrollPane scrollPane = new JScrollPane(mainPanel);
+        scrollPane.setBorder(null);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
 
         // Button panel
         JPanel buttonPanel = createDialogButtonPanel(dialog, tile);
 
-        dialog.add(mainPanel, BorderLayout.CENTER);
+        dialog.add(scrollPane, BorderLayout.CENTER);
         dialog.add(buttonPanel, BorderLayout.SOUTH);
+        
+        // Pack the dialog to fit content and ensure minimum size
+        dialog.pack();
+        
+        // Set maximum height to 80% of screen height
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        int maxHeight = (int)(screenSize.height * 0.8);
+        if (dialog.getHeight() > maxHeight) {
+            dialog.setSize(dialog.getWidth(), maxHeight);
+        }
+        
+        dialog.setLocationRelativeTo(this);
         dialog.setVisible(true);
     }
 
@@ -575,13 +590,13 @@ public class BingoBoardWindow extends JFrame {
         mainPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
         mainPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        // Left side: Info panel
+        // Left side: Info panel with vertical scrolling
         JPanel infoPanel = new JPanel();
         infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
         infoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
         // Title
-        JLabel titleLabel = new JLabel("<html><h2>" + tile.getTitle() + "</h2></html>");
+        JLabel titleLabel = new JLabel("<html><h2 style='margin: 0;'>" + tile.getTitle() + "</h2></html>");
         titleLabel.setFont(FontManager.getRunescapeBoldFont());
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -592,7 +607,7 @@ public class BingoBoardWindow extends JFrame {
         xpLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         xpLabel.setBorder(new EmptyBorder(5, 0, 10, 0));
 
-        // Description
+        // Description with proper wrapping
         JTextArea descriptionArea = new JTextArea(tile.getDescription());
         descriptionArea.setWrapStyleWord(true);
         descriptionArea.setLineWrap(true);
@@ -600,6 +615,8 @@ public class BingoBoardWindow extends JFrame {
         descriptionArea.setForeground(Color.WHITE);
         descriptionArea.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         descriptionArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+        // Set preferred size for proper wrapping
+        descriptionArea.setPreferredSize(new Dimension(250, descriptionArea.getPreferredSize().height));
 
         infoPanel.add(titleLabel);
         infoPanel.add(xpLabel);
@@ -617,14 +634,17 @@ public class BingoBoardWindow extends JFrame {
             goalsLabel.setForeground(Color.WHITE);
             goalsLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             goalsPanel.add(goalsLabel);
+            goalsPanel.add(Box.createVerticalStrut(5));
 
             for (Goal goal : tile.getGoals()) {
                 JLabel goalLabel = new JLabel("• " + goal.getDescription() + ": " + goal.getTargetValue());
                 goalLabel.setForeground(Color.LIGHT_GRAY);
                 goalLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 goalsPanel.add(goalLabel);
+                goalsPanel.add(Box.createVerticalStrut(2));
             }
 
+            infoPanel.add(Box.createVerticalStrut(5));
             infoPanel.add(goalsPanel);
         }
 
@@ -647,9 +667,11 @@ public class BingoBoardWindow extends JFrame {
                 JLabel countLabel = new JLabel("Submissions: " + tile.getSubmission().getSubmissionCount());
                 countLabel.setForeground(Color.LIGHT_GRAY);
                 countLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                statusPanel.add(Box.createVerticalStrut(2));
                 statusPanel.add(countLabel);
             }
 
+            infoPanel.add(Box.createVerticalStrut(5));
             infoPanel.add(statusPanel);
         }
 
