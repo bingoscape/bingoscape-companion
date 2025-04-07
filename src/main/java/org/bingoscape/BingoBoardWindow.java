@@ -70,6 +70,44 @@ public class BingoBoardWindow extends JFrame {
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         titlePanel.add(titleLabel, BorderLayout.CENTER);
 
+        // Create button container for reload and pin buttons
+        JPanel buttonContainer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        buttonContainer.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+        // Add pin button
+        JButton pinButton = new JButton(isPinned() ? "Unpin" : "Pin");
+        pinButton.setFocusPainted(false);
+        pinButton.setContentAreaFilled(false);
+        pinButton.setForeground(Color.WHITE);
+        pinButton.setBorder(new EmptyBorder(0, 5, 0, 5));
+
+        // Add hover effect for pin button
+        pinButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                if (pinButton.isEnabled()) {
+                    pinButton.setContentAreaFilled(true);
+                    pinButton.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+                }
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                pinButton.setContentAreaFilled(false);
+            }
+        });
+
+        // Add pin action
+        pinButton.addActionListener(e -> {
+            if (isPinned()) {
+                plugin.unpinBingo();
+                pinButton.setText("Pin");
+            } else {
+                plugin.pinBingo(currentBingo.getId());
+                pinButton.setText("Unpin");
+            }
+        });
+
         // Add reload button
         JButton reloadButton = new JButton();
         reloadButton.setIcon(new ImageIcon(getClass().getResource("/refresh_icon.png")));
@@ -83,8 +121,7 @@ public class BingoBoardWindow extends JFrame {
         reloadButton.setBorder(new EmptyBorder(0, 5, 0, 5));
 
         // Create a container panel for the button to ensure proper spacing
-        JPanel buttonContainer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        buttonContainer.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        buttonContainer.add(pinButton);
         buttonContainer.add(reloadButton);
 
         // Add hover effect
@@ -852,5 +889,10 @@ public class BingoBoardWindow extends JFrame {
         executor.shutdown();
         imageCache.clear();
         super.dispose();
+    }
+
+    private boolean isPinned() {
+        return currentBingo != null && 
+               currentBingo.getId().toString().equals(plugin.getConfig().pinnedBingoId());
     }
 }

@@ -23,6 +23,7 @@ import javax.swing.DefaultListCellRenderer;
 import java.awt.event.ActionListener;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import javax.swing.DefaultComboBoxModel;
 
 public class BingoScapePanel extends PluginPanel {
     // Constants
@@ -315,6 +316,11 @@ public class BingoScapePanel extends PluginPanel {
                         text.append(" [Locked]");
                     }
 
+                    // Show if this bingo is pinned
+                    if (bingo.getId().toString().equals(plugin.getConfig().pinnedBingoId())) {
+                        text.append(" [Pinned]");
+                    }
+
                     setText(text.toString());
                 }
 
@@ -367,54 +373,93 @@ public class BingoScapePanel extends PluginPanel {
 
     public void updateEventsList(List<EventData> events) {
         SwingUtilities.invokeLater(() -> {
-            eventSelector.removeAllItems();
+            // Store current selections
+            EventData selectedEvent = (EventData) eventSelector.getSelectedItem();
+            String selectedEventId = selectedEvent != null ? selectedEvent.getId().toString() : null;
+            String pinnedBingoId = plugin.getConfig().pinnedBingoId();
 
-            if (events == null || events.isEmpty()) {
-                // Check if "no events" label already exists
-                boolean hasNoEventsLabel = false;
-                for (Component c : eventsPanel.getComponents()) {
-                    if (c instanceof JLabel && NO_EVENTS_TEXT.equals(((JLabel) c).getText())) {
-                        hasNoEventsLabel = true;
+            // Update the event selector model
+            DefaultComboBoxModel<EventData> model = new DefaultComboBoxModel<>();
+            for (EventData event : events) {
+                model.addElement(event);
+                // If this event contains the pinned bingo, select it
+                if (!pinnedBingoId.isEmpty() && event.getBingos().stream()
+                        .anyMatch(b -> b.getId().toString().equals(pinnedBingoId))) {
+                    selectedEventId = event.getId().toString();
+                }
+            }
+            eventSelector.setModel(model);
+
+            // Restore selection if possible
+            if (selectedEventId != null) {
+                for (int i = 0; i < model.getSize(); i++) {
+                    EventData event = model.getElementAt(i);
+                    if (event.getId().toString().equals(selectedEventId)) {
+                        eventSelector.setSelectedIndex(i);
                         break;
                     }
                 }
-
-                if (!hasNoEventsLabel) {
-                    JLabel noEventsLabel = new JLabel(NO_EVENTS_TEXT);
-                    noEventsLabel.setForeground(Color.LIGHT_GRAY);
-                    eventsPanel.add(noEventsLabel, BorderLayout.SOUTH);
-                }
-
-                eventDetailsPanel.setVisible(false);
-                bingoPanel.setVisible(false);
-                return;
+            } else if (model.getSize() > 0) {
+                eventSelector.setSelectedIndex(0);
             }
 
-            // Remove "no events" label if it exists
-            for (Component c : eventsPanel.getComponents()) {
-                if (c instanceof JLabel && NO_EVENTS_TEXT.equals(((JLabel) c).getText())) {
-                    eventsPanel.remove(c);
-                }
-            }
-
-            for (EventData event : events) {
-                eventSelector.addItem(event);
-            }
-
-            eventsPanel.revalidate();
-            eventsPanel.repaint();
+            // Update UI state
+            eventSelector.setEnabled(model.getSize() > 0);
+            reloadEventsButton.setEnabled(true);
+            loadingLabel.setVisible(false);
         });
     }
 
     // Method to update event details with enhanced information
-    public void updateEventDetails(EventData event) {
+    public void updateEventDetails(EventData eventData) {
+        if (eventData == null) {
+            eventDetailsPanel.setVisible(false);
+            bingoPanel.setVisible(false);
+            return;
+        }
+
+        // Update bingo selector
+        bingoSelector.removeAllItems();
+        String pinnedBingoId = plugin.getConfig().pinnedBingoId();
+        Bingo pinnedBingo = null;
+
+        // First pass to find pinned bingo if it exists
+        if (!pinnedBingoId.isEmpty()) {
+            for (Bingo bingo : eventData.getBingos()) {
+                if (bingo.getId().toString().equals(pinnedBingoId)) {
+                    pinnedBingo = bingo;
+                    break;
+                }
+            }
+        }
+
+        // Add all bingos, with pinned one first if it exists
+        if (pinnedBingo != null) {
+            bingoSelector.addItem(pinnedBingo);
+        }
+        for (Bingo bingo : eventData.getBingos()) {
+            if (pinnedBingo == null || !bingo.getId().equals(pinnedBingo.getId())) {
+                bingoSelector.addItem(bingo);
+            }
+        }
+
+        // Select pinned bingo if it exists, otherwise first bingo
+        if (pinnedBingo != null) {
+            bingoSelector.setSelectedItem(pinnedBingo);
+        } else if (bingoSelector.getItemCount() > 0) {
+            bingoSelector.setSelectedIndex(0);
+        }
+
+        // Rest of the event details update...
+        // ... existing code ...
+
         SwingUtilities.invokeLater(() -> {
             // Clear previous event details
             eventDetailsPanel.removeAll();
             bingoSelector.removeAllItems();
 
             // Build event details panel
-            if (event != null) {
+            if (eventData != null) {
                 // Title panel
                 JPanel titlePanel = new JPanel();
                 titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS));
@@ -422,23 +467,23 @@ public class BingoScapePanel extends PluginPanel {
                 titlePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 titlePanel.setBorder(new EmptyBorder(5, 5, 5, 5));
                 
-                JLabel titleLabel = new JLabel(event.getTitle());
+                JLabel titleLabel = new JLabel(eventData.getTitle());
                 titleLabel.setFont(FontManager.getRunescapeBoldFont());
                 titleLabel.setForeground(new Color(255, 215, 0)); // Gold color
                 titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 titlePanel.add(titleLabel);
                 
                 // Add status indicator
-                JLabel statusLabel = new JLabel(event.isLocked() ? "🔒 Locked" : "✅ Active");
-                statusLabel.setForeground(event.isLocked() ? Color.LIGHT_GRAY : new Color(34, 197, 94));
+                JLabel statusLabel = new JLabel(eventData.isLocked() ? "🔒 Locked" : "✅ Active");
+                statusLabel.setForeground(eventData.isLocked() ? Color.LIGHT_GRAY : new Color(34, 197, 94));
                 statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 titlePanel.add(statusLabel);
                 
                 eventDetailsPanel.add(titlePanel);
 
                 // Event description
-                if (event.getDescription() != null && !event.getDescription().isEmpty()) {
-                    JTextArea descriptionArea = new JTextArea(event.getDescription());
+                if (eventData.getDescription() != null && !eventData.getDescription().isEmpty()) {
+                    JTextArea descriptionArea = new JTextArea(eventData.getDescription());
                     descriptionArea.setWrapStyleWord(true);
                     descriptionArea.setLineWrap(true);
                     descriptionArea.setEditable(false);
@@ -460,34 +505,34 @@ public class BingoScapePanel extends PluginPanel {
                 infoSection.setAlignmentX(Component.LEFT_ALIGNMENT);
 
                 // Event dates
-                if (event.getStartDate() != null && event.getEndDate() != null) {
+                if (eventData.getStartDate() != null && eventData.getEndDate() != null) {
                     addInfoLabel(infoSection, "📅 Event dates: " +
-                            DATE_FORMAT.format(event.getStartDate()) + " - " +
-                            DATE_FORMAT.format(event.getEndDate()));
+                            DATE_FORMAT.format(eventData.getStartDate()) + " - " +
+                            DATE_FORMAT.format(eventData.getEndDate()));
                 }
 
                 // Prize pool
-                if (event.getBasePrizePool() > 0) {
-                    addInfoLabel(infoSection, "💰 Prize pool: " + formatGpAmount(event.getBasePrizePool()));
-                    if (event.getMinimumBuyIn() > 0) {
-                        addInfoLabel(infoSection, "💎 Minimum buy-in: " + formatGpAmount(event.getMinimumBuyIn()));
+                if (eventData.getBasePrizePool() > 0) {
+                    addInfoLabel(infoSection, "💰 Prize pool: " + formatGpAmount(eventData.getBasePrizePool()));
+                    if (eventData.getMinimumBuyIn() > 0) {
+                        addInfoLabel(infoSection, "💎 Minimum buy-in: " + formatGpAmount(eventData.getMinimumBuyIn()));
                     }
                 }
 
                 // Role
-                if (event.getRole() != null) {
-                    addInfoLabel(infoSection, "👤 Role: " + formatRole(event.getRole()));
+                if (eventData.getRole() != null) {
+                    addInfoLabel(infoSection, "👤 Role: " + formatRole(eventData.getRole()));
                 }
 
                 // Clan
-                if (event.getClan() != null) {
-                    addInfoLabel(infoSection, "🏰 Clan: " + event.getClan().getName());
+                if (eventData.getClan() != null) {
+                    addInfoLabel(infoSection, "🏰 Clan: " + eventData.getClan().getName());
                 }
 
                 // Team
-                if (event.getUserTeam() != null) {
-                    addInfoLabel(infoSection, "👥 Team: " + event.getUserTeam().getName());
-                    if (event.getUserTeam().getMembers() != null && !event.getUserTeam().getMembers().isEmpty()) {
+                if (eventData.getUserTeam() != null) {
+                    addInfoLabel(infoSection, "👥 Team: " + eventData.getUserTeam().getName());
+                    if (eventData.getUserTeam().getMembers() != null && !eventData.getUserTeam().getMembers().isEmpty()) {
                         JPanel membersPanel = new JPanel();
                         membersPanel.setLayout(new BoxLayout(membersPanel, BoxLayout.Y_AXIS));
                         membersPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -495,7 +540,7 @@ public class BingoScapePanel extends PluginPanel {
                         membersPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
                         // First add the leader
-                        for (TeamMember member : event.getUserTeam().getMembers()) {
+                        for (TeamMember member : eventData.getUserTeam().getMembers()) {
                             if (member.isLeader()) {
                                 String memberText = "• " + member.getRunescapeName() + " 👑";
                                 JLabel memberLabel = new JLabel(memberText);
@@ -508,7 +553,7 @@ public class BingoScapePanel extends PluginPanel {
                         }
 
                         // Then add other members
-                        for (TeamMember member : event.getUserTeam().getMembers()) {
+                        for (TeamMember member : eventData.getUserTeam().getMembers()) {
                             if (!member.isLeader()) {
                                 String memberText = "• " + member.getRunescapeName();
                                 JLabel memberLabel = new JLabel(memberText);
@@ -523,16 +568,16 @@ public class BingoScapePanel extends PluginPanel {
                 }
 
                 // Available boards
-                if (event.getBingos() != null) {
-                    addInfoLabel(infoSection, "🎯 Available boards: " + event.getBingos().size());
+                if (eventData.getBingos() != null) {
+                    addInfoLabel(infoSection, "🎯 Available boards: " + eventData.getBingos().size());
                 }
 
                 eventDetailsPanel.add(infoSection);
                 eventDetailsPanel.setVisible(true);
 
                 // Populate bingo selector
-                if (event.getBingos() != null && !event.getBingos().isEmpty()) {
-                    for (Bingo bingo : event.getBingos()) {
+                if (eventData.getBingos() != null && !eventData.getBingos().isEmpty()) {
+                    for (Bingo bingo : eventData.getBingos()) {
                         bingoSelector.addItem(bingo);
                     }
                     bingoPanel.setVisible(true);

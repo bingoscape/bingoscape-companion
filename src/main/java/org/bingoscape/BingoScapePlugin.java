@@ -68,6 +68,7 @@ public class BingoScapePlugin extends Plugin {
     @Inject
     private ClientThread clientThread;
 
+    @Getter
     @Inject
     private BingoScapeConfig config;
 
@@ -109,11 +110,11 @@ public class BingoScapePlugin extends Plugin {
 
     @Override
     protected void startUp() {
-        // Initialize components
-        panel = new BingoScapePanel(this);
-
-        // Set up navigation button
+        // Load the icon for the side panel
         final BufferedImage icon = ImageUtil.loadImageResource(getClass(), ICON_PATH);
+
+        // Create and initialize the side panel
+        panel = new BingoScapePanel(this);
         navButton = NavigationButton.builder()
                 .tooltip("BingoScape")
                 .icon(icon)
@@ -122,13 +123,37 @@ public class BingoScapePlugin extends Plugin {
                 .build();
 
         clientToolbar.addNavigation(navButton);
-
-        // Add the overlay
         overlayManager.add(codephraseOverlay);
 
-        // Initialize data
+        // Load all events and handle pinned bingo
         if (hasApiKey()) {
-            fetchActiveEvents();
+            String pinnedBingoId = config.pinnedBingoId();
+            apiService.fetchEvents(
+                events -> {
+                    activeEvents.clear();
+                    activeEvents.addAll(events);
+                    sortEvents(activeEvents);
+                    panel.updateEventsList(activeEvents);
+
+                    // If there's a pinned bingo, find and select its event
+                    if (!pinnedBingoId.isEmpty()) {
+                        UUID pinnedId = UUID.fromString(pinnedBingoId);
+                        for (EventData event : events) {
+                            if (event.getBingos().stream().anyMatch(b -> b.getId().equals(pinnedId))) {
+                                // Found the event with pinned bingo, select it and load the bingo
+                                setEventDetails(event);
+                                apiService.refreshBingoBoard(
+                                    pinnedId,
+                                    bingo -> selectBingo(bingo),
+                                    error -> log.error("Failed to load pinned bingo: " + error)
+                                );
+                                break;
+                            }
+                        }
+                    }
+                },
+                error -> log.error("Failed to load events: " + error)
+            );
         }
     }
 
@@ -178,7 +203,7 @@ public class BingoScapePlugin extends Plugin {
             Date now = new Date();
             boolean e1Upcoming = e1.getStartDate().after(now);
             boolean e2Upcoming = e2.getStartDate().after(now);
-            
+
             if (e1Upcoming != e2Upcoming) {
                 return e1Upcoming ? -1 : 1;
             }
@@ -293,6 +318,14 @@ public class BingoScapePlugin extends Plugin {
 
     private boolean hasApiKey() {
         return config.apiKey() != null && !config.apiKey().isEmpty();
+    }
+
+    public void pinBingo(UUID bingoId) {
+        config.pinnedBingoId(bingoId.toString());
+    }
+
+    public void unpinBingo() {
+        config.pinnedBingoId("");
     }
 
     @Provides
