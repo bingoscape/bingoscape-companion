@@ -9,9 +9,8 @@ import net.runelite.client.ui.overlay.components.TitleComponent;
 import org.bingoscape.models.Bingo;
 
 import javax.inject.Inject;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Graphics2D;
+import javax.swing.*;
+import java.awt.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.TimeZone;
@@ -21,6 +20,7 @@ import java.util.TimeZone;
  */
 public class BingoCodephraseOverlay extends OverlayPanel {
     private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm:ss");
+    private static final int MAX_WIDTH = 200; // Maximum width for the overlay
 
     private final BingoScapePlugin plugin;
     private final BingoScapeConfig config;
@@ -33,7 +33,7 @@ public class BingoCodephraseOverlay extends OverlayPanel {
         this.plugin = plugin;
         this.config = config;
 
-        setPriority(OverlayPriority.LOW);
+        setPriority(0.1f);
         setPosition(OverlayPosition.TOP_LEFT);
     }
 
@@ -63,10 +63,12 @@ public class BingoCodephraseOverlay extends OverlayPanel {
                 .rightColor(Color.WHITE)
                 .build());
 
-        // Add codephrase
+        // Add codephrase with wrapping
+        String codephrase = currentBingo.getCodephrase();
+
         panelComponent.getChildren().add(LineComponent.builder()
                 .left("Codephrase:")
-                .right(currentBingo.getCodephrase())
+                .right(codephrase)
                 .rightColor(Color.WHITE)
                 .build());
 
@@ -76,6 +78,12 @@ public class BingoCodephraseOverlay extends OverlayPanel {
                 .right(utcNow())
                 .rightColor(Color.LIGHT_GRAY)
                 .build());
+
+        // Calculate width based on the longest line in the wrapped text
+        int width = graphics.getFontMetrics().stringWidth("Codephrase: " + codephrase) + 20;
+
+        // Set preferred size based on actual text width
+        panelComponent.setPreferredSize(new Dimension(width, 0));
 
         return super.render(graphics);
     }

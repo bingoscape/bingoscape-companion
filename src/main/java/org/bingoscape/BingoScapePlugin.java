@@ -43,6 +43,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
+import java.util.Date;
 
 @Slf4j
 @PluginDescriptor(
@@ -175,9 +176,37 @@ public class BingoScapePlugin extends Plugin {
 
                     activeEvents.clear();
                     activeEvents.addAll(Arrays.asList(eventsResponse));
+                    sortEvents(activeEvents);
                     panel.updateEventsList(activeEvents);
                 }
             }
+        });
+    }
+
+    private void sortEvents(List<EventData> events) {
+        events.sort((e1, e2) -> {
+            // First sort by locked status (active events first)
+            if (e1.isLocked() != e2.isLocked()) {
+                return e1.isLocked() ? 1 : -1;
+            }
+
+            // Then sort by start date (upcoming events first)
+            Date now = new Date();
+            boolean e1Upcoming = e1.getStartDate().after(now);
+            boolean e2Upcoming = e2.getStartDate().after(now);
+            
+            if (e1Upcoming != e2Upcoming) {
+                return e1Upcoming ? -1 : 1;
+            }
+
+            // For events with the same status, sort by start date (most recent first)
+            int dateComparison = e2.getStartDate().compareTo(e1.getStartDate());
+            if (dateComparison != 0) {
+                return dateComparison;
+            }
+
+            // Finally, sort alphabetically by title
+            return e1.getTitle().compareToIgnoreCase(e2.getTitle());
         });
     }
 
