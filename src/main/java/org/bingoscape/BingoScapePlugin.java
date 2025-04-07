@@ -22,6 +22,7 @@ import net.runelite.client.util.ImageUtil;
 import net.runelite.client.task.Schedule;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.overlay.OverlayManager;
+import org.bingoscape.services.BingoScapeApiService;
 
 import java.time.temporal.ChronoUnit;
 import java.awt.image.BufferedImage;
@@ -91,6 +92,9 @@ public class BingoScapePlugin extends Plugin {
     @Inject
     private Gson gson;
 
+    @Inject
+    private BingoScapeApiService apiService;
+
     // Plugin components
     private NavigationButton navButton;
     private BingoScapePanel panel;
@@ -152,37 +156,15 @@ public class BingoScapePlugin extends Plugin {
             return;
         }
 
-        String apiUrl = config.apiBaseUrl() + "/api/runelite/events";
-
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .header("Authorization", "Bearer " + config.apiKey())
-                .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                log.error("Failed to fetch events", e);
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful() || responseBody == null) {
-                        log.error("Unsuccessful response: " + response);
-                        return;
-                    }
-
-                    String jsonData = responseBody.string();
-                    EventData[] eventsResponse = gson.fromJson(jsonData, EventData[].class);
-
-                    activeEvents.clear();
-                    activeEvents.addAll(Arrays.asList(eventsResponse));
-                    sortEvents(activeEvents);
-                    panel.updateEventsList(activeEvents);
-                }
-            }
-        });
+        apiService.fetchActiveEvents(
+            events -> {
+                activeEvents.clear();
+                activeEvents.addAll(events);
+                sortEvents(activeEvents);
+                panel.updateEventsList(activeEvents);
+            },
+            error -> showErrorMessage(error)
+        );
     }
 
     private void sortEvents(List<EventData> events) {
@@ -256,18 +238,6 @@ public class BingoScapePlugin extends Plugin {
         return screenshot;
     }
 
-
-    // Add this method to your plugin
-    private void showAlert(String message, String title, int messageType) {
-        SwingUtilities.invokeLater(() -> {
-            JOptionPane.showMessageDialog(
-                    panel,
-                    message,
-                    title,
-                    messageType
-            );
-        });
-    }
     private byte[] convertImageToBytes(BufferedImage image) throws IOException {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         ImageIO.write(image, PNG_FORMAT, outputStream);
@@ -275,89 +245,32 @@ public class BingoScapePlugin extends Plugin {
     }
 
     public void submitTileCompletionWithScreenshot(UUID tileId, byte[] screenshotBytes) {
-
-        String apiUrl = config.apiBaseUrl() + "/api/runelite/tiles/" + tileId + "/submissions";
-
-        RequestBody requestBody = new MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart("image", "screenshot.png", RequestBody.create(MEDIA_TYPE_PNG, screenshotBytes))
-                .build();
-
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .header("Authorization", "Bearer " + config.apiKey())
-                .post(requestBody)
-                .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                log.error("Failed to submit tile completion", e);
-                showErrorMessage("Failed to submit tile completion to BingoScape.");
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                try (ResponseBody responseBody = response.body()) {
-                    String stringBody = responseBody.string();
-                    if (!response.isSuccessful()) {
-                        ErrorResponse errorResponse = gson.fromJson(stringBody, ErrorResponse.class);
-                        log.error("Unsuccessful submission response: {}", errorResponse.getError());
-                        showErrorMessage(errorResponse.getError());
-                        if (response.code() == 423) { // 423 Locked
-                            refreshBingoBoard();
-                        }
-                        return;
-                    }
-
-                    showSuccessMessage("Tile submission sent to BingoScape!");
-
-                    // Refresh the current bingo board with updated tile statuses
-                    if (currentBingo != null) {
-                        Bingo updatedBingo = gson.fromJson(stringBody, Bingo.class);
-                        updateCurrentBingoAndPanel(updatedBingo);
-                    }
-                } finally {
-                    response.close();
+        apiService.submitTileCompletion(
+            tileId,
+            screenshotBytes,
+            updatedBingo -> {
+                showSuccessMessage("Tile submission sent to BingoScape!");
+                updateCurrentBingoAndPanel(updatedBingo);
+            },
+            error -> {
+                showErrorMessage(error);
+                if (error.contains("423")) { // 423 Locked
+                    refreshBingoBoard();
                 }
             }
-        });
+        );
     }
 
-    // Add this new method to handle refreshing the bingo board:
     public void refreshBingoBoard() {
         if (currentBingo == null || !hasApiKey()) {
             return;
         }
 
-        String apiUrl = config.apiBaseUrl() + "/api/runelite/bingos/" + currentBingo.getId();
-
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .header("Authorization", "Bearer " + config.apiKey())
-                .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                log.error("Failed to refresh bingo board", e);
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful() || responseBody == null) {
-                        log.error("Unsuccessful response when refreshing bingo: " + response);
-                        return;
-                    }
-
-                    String jsonData = responseBody.string();
-                    Bingo updatedBingo = gson.fromJson(jsonData, Bingo.class);
-
-                    updateCurrentBingoAndPanel(updatedBingo);
-                }
-            }
-        });
+        apiService.refreshBingoBoard(
+            currentBingo.getId(),
+            this::updateCurrentBingoAndPanel,
+            error -> log.error(error)
+        );
     }
 
     private void updateCurrentBingoAndPanel(Bingo updatedBingo) {
