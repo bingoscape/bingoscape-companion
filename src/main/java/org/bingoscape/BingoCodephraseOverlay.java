@@ -50,9 +50,25 @@ public class BingoCodephraseOverlay extends OverlayPanel {
             return null;
         }
 
+        // Get all text components that will be displayed
+        String title = plugin.getCurrentEvent().getTitle();
+        String boardText = "Board: " + currentBingo.getTitle();
+        String codephraseText = "Codephrase: " + currentBingo.getCodephrase();
+        String timeText = "Time: " + utcNow();
+
+        // Calculate maximum width based on all components
+        FontMetrics metrics = graphics.getFontMetrics();
+        int maxWidth = Math.max(
+            Math.max(metrics.stringWidth(title), metrics.stringWidth(boardText)),
+            Math.max(metrics.stringWidth(codephraseText), metrics.stringWidth(timeText))
+        );
+
+        // Add some padding
+        maxWidth += 20;
+
         // Add title
         panelComponent.getChildren().add(TitleComponent.builder()
-                .text(plugin.getCurrentEvent().getTitle())
+                .text(title)
                 .color(new Color(255, 215, 0)) // Gold color
                 .build());
 
@@ -63,12 +79,10 @@ public class BingoCodephraseOverlay extends OverlayPanel {
                 .rightColor(Color.WHITE)
                 .build());
 
-        // Add codephrase with wrapping
-        String codephrase = currentBingo.getCodephrase();
-
+        // Add codephrase
         panelComponent.getChildren().add(LineComponent.builder()
                 .left("Codephrase:")
-                .right(codephrase)
+                .right(currentBingo.getCodephrase())
                 .rightColor(Color.WHITE)
                 .build());
 
@@ -79,11 +93,8 @@ public class BingoCodephraseOverlay extends OverlayPanel {
                 .rightColor(Color.LIGHT_GRAY)
                 .build());
 
-        // Calculate width based on the longest line in the wrapped text
-        int width = graphics.getFontMetrics().stringWidth("Codephrase: " + codephrase) + 20;
-
-        // Set preferred size based on actual text width
-        panelComponent.setPreferredSize(new Dimension(width, 0));
+        // Set preferred size based on maximum width
+        panelComponent.setPreferredSize(new Dimension(maxWidth, 0));
 
         return super.render(graphics);
     }
