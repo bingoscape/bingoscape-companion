@@ -136,12 +136,14 @@ public class BingoScapePlugin extends Plugin {
 
     @Subscribe
     public void onGameStateChanged(GameStateChanged gameStateChanged) {
-        boolean wasLoggedIn = isLoggedIn;
-        isLoggedIn = gameStateChanged.getGameState() == GameState.LOGGED_IN;
-
-        // Only fetch if player has just logged in
-        if (isLoggedIn && !wasLoggedIn && hasApiKey()) {
-            fetchActiveEvents();
+        // Only update login state if transitioning to LOGGED_IN from a non-logged-in state
+        if (gameStateChanged.getGameState() == GameState.LOGGED_IN && !isLoggedIn) {
+            isLoggedIn = true;
+            if (hasApiKey()) {
+                fetchActiveEvents();
+            }
+        } else if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN) {
+            isLoggedIn = false;
         }
     }
 
