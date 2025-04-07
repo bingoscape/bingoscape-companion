@@ -126,8 +126,7 @@ public class BingoScapePanel extends PluginPanel {
     private void setupEventDetailsPanel() {
         eventDetailsPanel.setLayout(new BoxLayout(eventDetailsPanel, BoxLayout.Y_AXIS));
         eventDetailsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        eventDetailsPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 0, 0, 0));
-        eventDetailsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        eventDetailsPanel.setBorder(new EmptyBorder(0, 0, 0, 0));
     }
 
     private void configureEventSelector() {
@@ -416,21 +415,26 @@ public class BingoScapePanel extends PluginPanel {
 
             // Build event details panel
             if (event != null) {
-                // Create a scrollable panel for event details to handle overflow
-                JPanel detailsContent = new JPanel();
-                detailsContent.setLayout(new BoxLayout(detailsContent, BoxLayout.Y_AXIS));
-                detailsContent.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-                // Make sure the details content has proper alignment
-                detailsContent.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-                // Title with proper styling
+                // Title panel
+                JPanel titlePanel = new JPanel();
+                titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS));
+                titlePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                titlePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                titlePanel.setBorder(new EmptyBorder(5, 5, 5, 5));
+                
                 JLabel titleLabel = new JLabel(event.getTitle());
                 titleLabel.setFont(FontManager.getRunescapeBoldFont());
-                titleLabel.setForeground(Color.WHITE);
+                titleLabel.setForeground(new Color(255, 215, 0)); // Gold color
                 titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                titleLabel.setBorder(new EmptyBorder(0, 0, COMPONENT_SPACING, 0));
-                detailsContent.add(titleLabel);
+                titlePanel.add(titleLabel);
+                
+                // Add status indicator
+                JLabel statusLabel = new JLabel(event.isLocked() ? "🔒 Locked" : "✅ Active");
+                statusLabel.setForeground(event.isLocked() ? Color.LIGHT_GRAY : new Color(34, 197, 94));
+                statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                titlePanel.add(statusLabel);
+                
+                eventDetailsPanel.add(titlePanel);
 
                 // Event description
                 if (event.getDescription() != null && !event.getDescription().isEmpty()) {
@@ -439,105 +443,94 @@ public class BingoScapePanel extends PluginPanel {
                     descriptionArea.setLineWrap(true);
                     descriptionArea.setEditable(false);
                     descriptionArea.setForeground(Color.WHITE);
-                    descriptionArea.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                    descriptionArea.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+                    descriptionArea.setBorder(new CompoundBorder(
+                        new MatteBorder(1, 0, 1, 0, ColorScheme.MEDIUM_GRAY_COLOR),
+                        new EmptyBorder(5, 5, 5, 5)
+                    ));
                     descriptionArea.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    descriptionArea.setBorder(new EmptyBorder(0, 0, COMPONENT_SPACING, 0));
-                    detailsContent.add(descriptionArea);
+                    eventDetailsPanel.add(descriptionArea);
                 }
 
+                // Info section
+                JPanel infoSection = new JPanel();
+                infoSection.setLayout(new BoxLayout(infoSection, BoxLayout.Y_AXIS));
+                infoSection.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                infoSection.setBorder(new EmptyBorder(5, 5, 5, 5));
+                infoSection.setAlignmentX(Component.LEFT_ALIGNMENT);
+
                 // Event dates
-                JPanel datesPanel = createInfoRow("Event dates: " +
-                        DATE_FORMAT.format(event.getStartDate()) + " - " +
-                        DATE_FORMAT.format(event.getEndDate()));
-                detailsContent.add(datesPanel);
+                if (event.getStartDate() != null && event.getEndDate() != null) {
+                    addInfoLabel(infoSection, "📅 Event dates: " +
+                            DATE_FORMAT.format(event.getStartDate()) + " - " +
+                            DATE_FORMAT.format(event.getEndDate()));
+                }
 
-                // Prize pool info
+                // Prize pool
                 if (event.getBasePrizePool() > 0) {
-                    String prizeText = formatGpAmount(event.getBasePrizePool());
-                    JPanel prizePanel = createInfoRow("Prize pool: " + prizeText);
-                    detailsContent.add(prizePanel);
-
-                    // Add minimum buy-in if applicable
+                    addInfoLabel(infoSection, "💰 Prize pool: " + formatGpAmount(event.getBasePrizePool()));
                     if (event.getMinimumBuyIn() > 0) {
-                        String buyInText = formatGpAmount(event.getMinimumBuyIn());
-                        JPanel buyInPanel = createInfoRow("Minimum buy-in: " + buyInText);
-                        detailsContent.add(buyInPanel);
+                        addInfoLabel(infoSection, "💎 Minimum buy-in: " + formatGpAmount(event.getMinimumBuyIn()));
                     }
                 }
 
-                // User role
+                // Role
                 if (event.getRole() != null) {
-                    JPanel rolePanel = createInfoRow("Role: " + formatRole(event.getRole()));
-                    detailsContent.add(rolePanel);
+                    addInfoLabel(infoSection, "👤 Role: " + formatRole(event.getRole()));
                 }
 
-                // Clan info
+                // Clan
                 if (event.getClan() != null) {
-                    JPanel clanPanel = createInfoRow("Clan: " + event.getClan().getName());
-                    detailsContent.add(clanPanel);
+                    addInfoLabel(infoSection, "🏰 Clan: " + event.getClan().getName());
                 }
 
-                // Team information (enhanced with member list)
+                // Team
                 if (event.getUserTeam() != null) {
-                    // Add team name
-                    JPanel teamPanel = createInfoRow("Team: " + event.getUserTeam().getName());
-                    detailsContent.add(teamPanel);
-
-                    // Add team members list with leader indicator
+                    addInfoLabel(infoSection, "👥 Team: " + event.getUserTeam().getName());
                     if (event.getUserTeam().getMembers() != null && !event.getUserTeam().getMembers().isEmpty()) {
                         JPanel membersPanel = new JPanel();
                         membersPanel.setLayout(new BoxLayout(membersPanel, BoxLayout.Y_AXIS));
                         membersPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-                        membersPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 10, 0, 0));
+                        membersPanel.setBorder(new EmptyBorder(0, 15, 0, 0));
                         membersPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-                        JLabel membersLabel = new JLabel("Team Members:");
-                        membersLabel.setForeground(Color.LIGHT_GRAY);
-                        membersLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                        membersPanel.add(membersLabel);
-
+                        // First add the leader
                         for (TeamMember member : event.getUserTeam().getMembers()) {
-                            String memberText = "• " + member.getRunescapeName();
                             if (member.isLeader()) {
-                                memberText += " (Leader)";
+                                String memberText = "• " + member.getRunescapeName() + " 👑";
+                                JLabel memberLabel = new JLabel(memberText);
+                                memberLabel.setForeground(new Color(255, 215, 0));
+                                memberLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                                membersPanel.add(memberLabel);
+                                membersPanel.add(Box.createVerticalStrut(2));
+                                break;
                             }
-
-                            JLabel memberLabel = new JLabel(memberText);
-                            memberLabel.setForeground(member.isLeader() ?
-                                    new Color(255, 215, 0) : Color.WHITE); // Gold color for leader
-                            memberLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                            membersPanel.add(memberLabel);
                         }
 
-                        detailsContent.add(membersPanel);
+                        // Then add other members
+                        for (TeamMember member : event.getUserTeam().getMembers()) {
+                            if (!member.isLeader()) {
+                                String memberText = "• " + member.getRunescapeName();
+                                JLabel memberLabel = new JLabel(memberText);
+                                memberLabel.setForeground(Color.WHITE);
+                                memberLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                                membersPanel.add(memberLabel);
+                                membersPanel.add(Box.createVerticalStrut(2));
+                            }
+                        }
+                        infoSection.add(membersPanel);
                     }
                 }
 
-                // Status information
-                JPanel statusPanel = createInfoRow("Status: " +
-                        (event.isLocked() ? "Locked" : "Active"));
-                detailsContent.add(statusPanel);
-
-                // Available bingos count
+                // Available boards
                 if (event.getBingos() != null) {
-                    JPanel bingoCountPanel = createInfoRow("Available boards: " +
-                            event.getBingos().size());
-                    detailsContent.add(bingoCountPanel);
+                    addInfoLabel(infoSection, "🎯 Available boards: " + event.getBingos().size());
                 }
 
-                // Add the details content to a scrollable pane
-                JScrollPane scrollPane = new JScrollPane(detailsContent);
-                scrollPane.setBorder(null);
-                scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-                scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-                scrollPane.setAlignmentX(Component.LEFT_ALIGNMENT);
-                scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-                scrollPane.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-                eventDetailsPanel.add(scrollPane);
+                eventDetailsPanel.add(infoSection);
                 eventDetailsPanel.setVisible(true);
 
-                // Populate bingo selector and show bingo panel
+                // Populate bingo selector
                 if (event.getBingos() != null && !event.getBingos().isEmpty()) {
                     for (Bingo bingo : event.getBingos()) {
                         bingoSelector.addItem(bingo);
@@ -551,24 +544,17 @@ public class BingoScapePanel extends PluginPanel {
                 bingoPanel.setVisible(false);
             }
 
-            // Validate and repaint the entire panel
             revalidate();
             repaint();
         });
     }
 
-    // Helper method to create consistent info rows
-    private JPanel createInfoRow(String text) {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        panel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        panel.setBorder(new EmptyBorder(2, 0, 2, 0));
-        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
+    private void addInfoLabel(JPanel container, String text) {
         JLabel label = new JLabel(text);
-        label.setForeground(Color.LIGHT_GRAY);
-        panel.add(label);
-
-        return panel;
+        label.setForeground(Color.WHITE);
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        container.add(label);
+        container.add(Box.createVerticalStrut(4));
     }
 
     // Helper method to format GP amounts nicely
