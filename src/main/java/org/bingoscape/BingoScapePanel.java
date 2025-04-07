@@ -316,9 +316,9 @@ public class BingoScapePanel extends PluginPanel {
                         text.append(" [Locked]");
                     }
 
-                    // Show if this bingo is pinned
+                    // Show pin icon if this bingo is pinned
                     if (bingo.getId().toString().equals(plugin.getConfig().pinnedBingoId())) {
-                        text.append(" [Pinned]");
+                        text.append(" 📌");
                     }
 
                     setText(text.toString());

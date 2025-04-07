@@ -193,6 +193,29 @@ public class BingoScapePlugin extends Plugin {
     }
 
     private void sortEvents(List<EventData> events) {
+        Date now = new Date();
+        
+        // Filter events based on configuration
+        events.removeIf(event -> {
+            // Filter past events
+            if (config.hidePastEvents() && event.getEndDate().before(now)) {
+                return true;
+            }
+            
+            // Filter locked events
+            if (config.hideLockedEvents() && event.isLocked()) {
+                return true;
+            }
+            
+            // Filter upcoming events
+            if (config.hideUpcomingEvents() && event.getStartDate().after(now)) {
+                return true;
+            }
+            
+            return false;
+        });
+
+        // Sort remaining events
         events.sort((e1, e2) -> {
             // First sort by locked status (active events first)
             if (e1.isLocked() != e2.isLocked()) {
@@ -200,10 +223,9 @@ public class BingoScapePlugin extends Plugin {
             }
 
             // Then sort by start date (upcoming events first)
-            Date now = new Date();
             boolean e1Upcoming = e1.getStartDate().after(now);
             boolean e2Upcoming = e2.getStartDate().after(now);
-
+            
             if (e1Upcoming != e2Upcoming) {
                 return e1Upcoming ? -1 : 1;
             }

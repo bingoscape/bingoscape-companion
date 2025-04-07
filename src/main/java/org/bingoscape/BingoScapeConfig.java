@@ -46,6 +46,36 @@ public interface BingoScapeConfig extends Config
     }
 
     @ConfigItem(
+            keyName = "hidePastEvents",
+            name = "Hide Past Events",
+            description = "Hide events that have already ended"
+    )
+    default boolean hidePastEvents()
+    {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "hideLockedEvents",
+            name = "Hide Locked Events",
+            description = "Hide events that are locked"
+    )
+    default boolean hideLockedEvents()
+    {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "hideUpcomingEvents",
+            name = "Hide Upcoming Events",
+            description = "Hide events that haven't started yet"
+    )
+    default boolean hideUpcomingEvents()
+    {
+        return false;
+    }
+
+    @ConfigItem(
             keyName = "pinnedBingoId",
             name = "Pinned Bingo ID",
             description = "The ID of the pinned bingo to display on startup",

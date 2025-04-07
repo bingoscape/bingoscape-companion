@@ -75,11 +75,12 @@ public class BingoBoardWindow extends JFrame {
         buttonContainer.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
         // Add pin button
-        JButton pinButton = new JButton(isPinned() ? "Unpin" : "Pin");
+        JButton pinButton = new JButton(isPinned() ? "Un-📌" : "📌");
         pinButton.setFocusPainted(false);
         pinButton.setContentAreaFilled(false);
         pinButton.setForeground(Color.WHITE);
         pinButton.setBorder(new EmptyBorder(0, 5, 0, 5));
+        pinButton.setToolTipText(isPinned() ? "Unpin Board" : "Pin Board");
 
         // Add hover effect for pin button
         pinButton.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -101,10 +102,12 @@ public class BingoBoardWindow extends JFrame {
         pinButton.addActionListener(e -> {
             if (isPinned()) {
                 plugin.unpinBingo();
-                pinButton.setText("Pin");
+                pinButton.setText("📌");
+                pinButton.setToolTipText("Pin Board");
             } else {
                 plugin.pinBingo(currentBingo.getId());
-                pinButton.setText("Unpin");
+                pinButton.setText("Un-📌");
+                pinButton.setToolTipText("Unpin Board");
             }
         });
 
