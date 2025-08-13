@@ -181,6 +181,63 @@ public class BingoScapePanel extends PluginPanel {
         };
     }
 
+    private static class SelectionState {
+        final String eventId;
+        final String bingoId;
+        
+        SelectionState(EventData event, Bingo bingo) {
+            this.eventId = event != null ? event.getId().toString() : null;
+            this.bingoId = bingo != null ? bingo.getId().toString() : null;
+        }
+    }
+
+    private SelectionState saveCurrentSelections() {
+        EventData selectedEvent = (EventData) eventSelector.getSelectedItem();
+        Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
+        return new SelectionState(selectedEvent, selectedBingo);
+    }
+
+    private void restoreSelections(SelectionState state) {
+        if (state.eventId != null) {
+            restoreEventSelection(state.eventId);
+        }
+        if (state.bingoId != null) {
+            restoreBingoSelection(state.bingoId);
+        }
+    }
+
+    private void restoreEventSelection(String eventId) {
+        for (int i = 0; i < eventSelector.getItemCount(); i++) {
+            EventData event = eventSelector.getItemAt(i);
+            if (event.getId().toString().equals(eventId)) {
+                eventSelector.setSelectedIndex(i);
+                break;
+            }
+        }
+    }
+
+    private void restoreBingoSelection(String bingoId) {
+        for (int i = 0; i < bingoSelector.getItemCount(); i++) {
+            Bingo bingo = bingoSelector.getItemAt(i);
+            if (bingo.getId().toString().equals(bingoId)) {
+                bingoSelector.setSelectedIndex(i);
+                break;
+            }
+        }
+    }
+
+    private void clearFadeTimerListeners() {
+        for (ActionListener listener : fadeTimer.getActionListeners()) {
+            fadeTimer.removeActionListener(listener);
+        }
+    }
+
+    private void setUIElementsEnabled(boolean enabled) {
+        reloadEventsButton.setEnabled(enabled);
+        eventSelector.setEnabled(enabled);
+        loadingLabel.setVisible(!enabled);
+    }
+
     private JButton createReloadEventsButton() {
         JButton button = new JButton();
         button.setIcon(new ImageIcon(getClass().getResource("/refresh_icon.png")));
