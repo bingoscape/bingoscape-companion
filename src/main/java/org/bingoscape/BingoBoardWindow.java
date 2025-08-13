@@ -28,6 +28,41 @@ public class BingoBoardWindow extends JFrame {
     private static final int SPACING = 4;
     private static final int IMAGE_LOADING_THREADS = 4;
 
+    // UI Constants
+    private static final int BUTTON_SIZE = 24;
+    private static final int SMALL_FONT_SIZE = 10;
+    private static final int MEDIUM_FONT_SIZE = 12;
+    private static final int LARGE_FONT_SIZE = 24;
+    private static final int DETAIL_IMAGE_SIZE = 150;
+    private static final int IMAGE_MARGIN = 10;
+    private static final int IMAGE_TITLE_OFFSET = 20;
+
+    // Color Constants
+    private static final Color GOLD_COLOR = new Color(255, 215, 0);
+
+    // Status Background Colors
+    private static final Color PENDING_BG_COLOR = new Color(30, 64, 122);
+    private static final Color ACCEPTED_BG_COLOR = new Color(17, 99, 47);
+    private static final Color REQUIRES_ACTION_BG_COLOR = new Color(117, 89, 4);
+    private static final Color DECLINED_BG_COLOR = new Color(120, 34, 34);
+
+    // Status Border Colors
+    private static final Color PENDING_BORDER_COLOR = new Color(59, 130, 246);
+    private static final Color ACCEPTED_BORDER_COLOR = new Color(34, 197, 94);
+    private static final Color REQUIRES_ACTION_BORDER_COLOR = new Color(234, 179, 8);
+    private static final Color DECLINED_BORDER_COLOR = new Color(239, 68, 68);
+
+    // Status Text Colors
+    private static final Color PENDING_TEXT_COLOR = new Color(59, 130, 246);
+    private static final Color ACCEPTED_TEXT_COLOR = new Color(34, 197, 94);
+    private static final Color REQUIRES_ACTION_TEXT_COLOR = new Color(234, 179, 8);
+    private static final Color DECLINED_TEXT_COLOR = new Color(239, 68, 68);
+
+    // Spacing Constants
+    private static final int SMALL_SPACING = 4;
+    private static final int MEDIUM_SPACING = 5;
+    private static final int DEFAULT_GRID_SIZE = 5;
+
     private final BingoScapePlugin plugin;
     private final JPanel bingoBoard;
     private JLabel titleLabel;
@@ -40,7 +75,6 @@ public class BingoBoardWindow extends JFrame {
         this.currentBingo = bingo;
         this.executor = Executors.newFixedThreadPool(IMAGE_LOADING_THREADS);
 
-        // Window setup
         // Window setup
         String windowTitle = "BingoScape - " + bingo.getTitle();
         // Add codephrase to title if available
@@ -63,7 +97,7 @@ public class BingoBoardWindow extends JFrame {
         JPanel titlePanel = new JPanel(new BorderLayout());
         titlePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
         titlePanel.setBorder(new EmptyBorder(0, 0, PADDING, 0));
-        
+
         titleLabel = new JLabel(bingo.getTitle());
         titleLabel.setFont(FontManager.getRunescapeBoldFont());
         titleLabel.setForeground(Color.WHITE);
@@ -79,7 +113,7 @@ public class BingoBoardWindow extends JFrame {
         pinButton.setFocusPainted(false);
         pinButton.setContentAreaFilled(false);
         pinButton.setForeground(Color.WHITE);
-        pinButton.setBorder(new EmptyBorder(0, 5, 0, 5));
+        pinButton.setBorder(new EmptyBorder(0, MEDIUM_SPACING, 0, MEDIUM_SPACING));
         pinButton.setToolTipText(isPinned() ? "Unpin Board" : "Pin Board");
 
         // Add hover effect for pin button
@@ -115,13 +149,13 @@ public class BingoBoardWindow extends JFrame {
         JButton reloadButton = new JButton();
         reloadButton.setIcon(new ImageIcon(getClass().getResource("/refresh_icon.png")));
         reloadButton.setToolTipText("Reload Board");
-        reloadButton.setPreferredSize(new Dimension(24, 24));
-        reloadButton.setMaximumSize(new Dimension(24, 24));
-        reloadButton.setMinimumSize(new Dimension(24, 24));
+        reloadButton.setPreferredSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
+        reloadButton.setMaximumSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
+        reloadButton.setMinimumSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
         reloadButton.setFocusPainted(false);
         reloadButton.setContentAreaFilled(false);
         reloadButton.setForeground(Color.WHITE);
-        reloadButton.setBorder(new EmptyBorder(0, 5, 0, 5));
+        reloadButton.setBorder(new EmptyBorder(0, MEDIUM_SPACING, 0, MEDIUM_SPACING));
 
         // Create a container panel for the button to ensure proper spacing
         buttonContainer.add(pinButton);
@@ -174,8 +208,8 @@ public class BingoBoardWindow extends JFrame {
     }
 
     private void updateGridLayout(Bingo bingo) {
-        int rows = bingo.getRows() <= 0 ? 5 : bingo.getRows();
-        int cols = bingo.getColumns() <= 0 ? 5 : bingo.getColumns();
+        int rows = bingo.getRows() <= 0 ? DEFAULT_GRID_SIZE : bingo.getRows();
+        int cols = bingo.getColumns() <= 0 ? DEFAULT_GRID_SIZE : bingo.getColumns();
         bingoBoard.setLayout(new GridLayout(rows, cols, SPACING, SPACING));
     }
 
@@ -225,8 +259,8 @@ public class BingoBoardWindow extends JFrame {
 
     private JPanel createHiddenTilePanel() {
         // Calculate tile size based on board dimensions
-        int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
-        int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
+        int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : DEFAULT_GRID_SIZE;
+        int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : DEFAULT_GRID_SIZE;
         int availableWidth = WINDOW_WIDTH - 40;
         int availableHeight = WINDOW_HEIGHT - 100;
         int tileSize = Math.min(availableWidth / cols, availableHeight / rows) - PADDING;
@@ -238,12 +272,12 @@ public class BingoBoardWindow extends JFrame {
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setBorder(new CompoundBorder(
                 new LineBorder(ColorScheme.BORDER_COLOR, 1),
-                new EmptyBorder(4, 4, 4, 4)
+                new EmptyBorder(SMALL_SPACING, SMALL_SPACING, SMALL_SPACING, SMALL_SPACING)
         ));
 
         JLabel hiddenLabel = new JLabel("?", SwingConstants.CENTER);
         hiddenLabel.setForeground(Color.GRAY);
-        hiddenLabel.setFont(new Font(hiddenLabel.getFont().getName(), Font.BOLD, 24));
+        hiddenLabel.setFont(new Font(hiddenLabel.getFont().getName(), Font.BOLD, LARGE_FONT_SIZE));
         panel.add(hiddenLabel, BorderLayout.CENTER);
 
         panel.setToolTipText("Hidden tile");
@@ -253,8 +287,8 @@ public class BingoBoardWindow extends JFrame {
     // Method to create enhanced tile panel with more information
     private JPanel createTilePanel(Tile tile) {
         // Calculate tile size based on board dimensions
-        int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
-        int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
+        int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : DEFAULT_GRID_SIZE;
+        int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : DEFAULT_GRID_SIZE;
         int availableWidth = WINDOW_WIDTH - 40;
         int availableHeight = WINDOW_HEIGHT - 100;
         int tileSize = Math.min(availableWidth / cols, availableHeight / rows) - PADDING;
@@ -273,7 +307,7 @@ public class BingoBoardWindow extends JFrame {
         // Set border based on submission status
         panel.setBorder(new CompoundBorder(
                 new LineBorder(getTileBorderColor(tile.getSubmission()), 2),
-                new EmptyBorder(4, 4, 4, 4)
+                new EmptyBorder(SMALL_SPACING, SMALL_SPACING, SMALL_SPACING, SMALL_SPACING)
         ));
 
         // Create tooltip with extended information
@@ -292,8 +326,8 @@ public class BingoBoardWindow extends JFrame {
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setOpaque(false);
         JLabel xpLabel = new JLabel(String.valueOf(tile.getWeight()) + " XP");
-        xpLabel.setForeground(new Color(255, 215, 0)); // Gold color
-        xpLabel.setFont(new Font(xpLabel.getFont().getName(), Font.BOLD, 10));
+        xpLabel.setForeground(GOLD_COLOR);
+        xpLabel.setFont(new Font(xpLabel.getFont().getName(), Font.BOLD, SMALL_FONT_SIZE));
         xpLabel.setHorizontalAlignment(SwingConstants.RIGHT);
         topPanel.add(xpLabel, BorderLayout.NORTH);
         panel.add(topPanel, BorderLayout.NORTH);
@@ -383,13 +417,13 @@ public class BingoBoardWindow extends JFrame {
 
         switch (submission.getStatus()) {
             case PENDING:
-                return new Color(30, 64, 122); // Darker blue
+                return PENDING_BG_COLOR;
             case ACCEPTED:
-                return new Color(17, 99, 47);  // Darker green
+                return ACCEPTED_BG_COLOR;
             case REQUIRES_INTERACTION:
-                return new Color(117, 89, 4);  // Darker yellow/gold
+                return REQUIRES_ACTION_BG_COLOR;
             case DECLINED:
-                return new Color(120, 34, 34); // Darker red
+                return DECLINED_BG_COLOR;
             default:
                 return ColorScheme.DARK_GRAY_COLOR;
         }
@@ -402,13 +436,13 @@ public class BingoBoardWindow extends JFrame {
 
         switch (submission.getStatus()) {
             case PENDING:
-                return new Color(59, 130, 246); // Blue
+                return PENDING_BORDER_COLOR;
             case ACCEPTED:
-                return new Color(34, 197, 94);  // Green
+                return ACCEPTED_BORDER_COLOR;
             case REQUIRES_INTERACTION:
-                return new Color(234, 179, 8);  // Yellow
+                return REQUIRES_ACTION_BORDER_COLOR;
             case DECLINED:
-                return new Color(239, 68, 68);  // Red
+                return DECLINED_BORDER_COLOR;
             default:
                 return ColorScheme.BORDER_COLOR;
         }
@@ -436,24 +470,24 @@ public class BingoBoardWindow extends JFrame {
 
         JLabel statusLabel = new JLabel();
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        statusLabel.setFont(new Font(statusLabel.getFont().getName(), Font.BOLD, 12));
+        statusLabel.setFont(new Font(statusLabel.getFont().getName(), Font.BOLD, MEDIUM_FONT_SIZE));
 
         switch (submission.getStatus()) {
             case PENDING:
                 statusLabel.setText("PENDING");
-                statusLabel.setForeground(new Color(59, 130, 246));
+                statusLabel.setForeground(PENDING_TEXT_COLOR);
                 break;
             case ACCEPTED:
                 statusLabel.setText("COMPLETED");
-                statusLabel.setForeground(new Color(34, 197, 94));
+                statusLabel.setForeground(ACCEPTED_TEXT_COLOR);
                 break;
             case REQUIRES_INTERACTION:
                 statusLabel.setText("NEEDS ACTION");
-                statusLabel.setForeground(new Color(234, 179, 8));
+                statusLabel.setForeground(REQUIRES_ACTION_TEXT_COLOR);
                 break;
             case DECLINED:
                 statusLabel.setText("DECLINED");
-                statusLabel.setForeground(new Color(239, 68, 68));
+                statusLabel.setForeground(DECLINED_TEXT_COLOR);
                 break;
             default:
                 // No overlay for NOT_SUBMITTED
@@ -517,7 +551,7 @@ public class BingoBoardWindow extends JFrame {
                         try {
                             // Scale the image to fit (CPU intensive)
                             // Use a better scaling approach that keeps aspect ratio
-                            Image scaledImage = getScaledImageImproved(originalImage, tileSize - 10, tileSize - 20);
+                            Image scaledImage = getScaledImageImproved(originalImage, tileSize - IMAGE_MARGIN, tileSize - IMAGE_TITLE_OFFSET);
                             ImageIcon icon = new ImageIcon(scaledImage);
 
                             // Add to cache
@@ -609,24 +643,24 @@ public class BingoBoardWindow extends JFrame {
 
         dialog.add(scrollPane, BorderLayout.CENTER);
         dialog.add(buttonPanel, BorderLayout.SOUTH);
-        
+
         // Pack the dialog to fit content and ensure minimum size
         dialog.pack();
-        
+
         // Set maximum height to 80% of screen height
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
         int maxHeight = (int)(screenSize.height * 0.8);
         if (dialog.getHeight() > maxHeight) {
             dialog.setSize(dialog.getWidth(), maxHeight);
         }
-        
+
         dialog.setLocationRelativeTo(this);
         dialog.setVisible(true);
     }
 
     private JPanel createTileDetailsPanel(Tile tile) {
         // Create a split panel with info on left, image on right
-        JPanel mainPanel = new JPanel(new BorderLayout(10, 0));
+        JPanel mainPanel = new JPanel(new BorderLayout(PADDING, 0));
         mainPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
         mainPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
@@ -645,7 +679,7 @@ public class BingoBoardWindow extends JFrame {
         JLabel xpLabel = new JLabel("XP: " + tile.getWeight());
         xpLabel.setForeground(Color.LIGHT_GRAY);
         xpLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        xpLabel.setBorder(new EmptyBorder(5, 0, 10, 0));
+        xpLabel.setBorder(new EmptyBorder(MEDIUM_SPACING, 0, PADDING, 0));
 
         // Description with proper wrapping
         JTextArea descriptionArea = new JTextArea(tile.getDescription());
@@ -736,10 +770,10 @@ public class BingoBoardWindow extends JFrame {
 
     private Color getStatusColor(TileSubmissionType status) {
         switch (status) {
-            case PENDING: return new Color(59, 130, 246);
-            case ACCEPTED: return new Color(34, 197, 94);
-            case REQUIRES_INTERACTION: return new Color(234, 179, 8);
-            case DECLINED: return new Color(239, 68, 68);
+            case PENDING: return PENDING_TEXT_COLOR;
+            case ACCEPTED: return ACCEPTED_TEXT_COLOR;
+            case REQUIRES_INTERACTION: return REQUIRES_ACTION_TEXT_COLOR;
+            case DECLINED: return DECLINED_TEXT_COLOR;
             default: return Color.LIGHT_GRAY;
         }
     }
@@ -747,7 +781,7 @@ public class BingoBoardWindow extends JFrame {
     private JPanel createTileImagePanel(Tile tile) {
         JPanel imagePanel = new JPanel(new BorderLayout());
         imagePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        imagePanel.setPreferredSize(new Dimension(150, 150));
+        imagePanel.setPreferredSize(new Dimension(DETAIL_IMAGE_SIZE, DETAIL_IMAGE_SIZE));
 
         if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
             // Create a label with loading state
@@ -781,7 +815,7 @@ public class BingoBoardWindow extends JFrame {
                         executor.submit(() -> {
                             try {
                                 // CPU-intensive scaling operation
-                                Image scaledImage = getScaledImageImproved(originalImage, 150, 150);
+                                Image scaledImage = getScaledImageImproved(originalImage, DETAIL_IMAGE_SIZE, DETAIL_IMAGE_SIZE);
                                 ImageIcon icon = new ImageIcon(scaledImage);
 
                                 // Add to cache
@@ -895,7 +929,7 @@ public class BingoBoardWindow extends JFrame {
     }
 
     private boolean isPinned() {
-        return currentBingo != null && 
+        return currentBingo != null &&
                currentBingo.getId().toString().equals(plugin.getConfig().pinnedBingoId());
     }
 }
