@@ -57,6 +57,7 @@ public class BingoScapePlugin extends Plugin {
     private static final String ICON_PATH = "/sidepanel_icon.png";
     private static final String PNG_FORMAT = "png";
     private static final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/png");
+    private static final String HTTP_STATUS_LOCKED = "423";
 
     // Injected components
     @Inject
@@ -301,7 +302,7 @@ public class BingoScapePlugin extends Plugin {
             },
             error -> {
                 showErrorMessage(error);
-                if (error.contains("423")) { // 423 Locked
+                if (error.contains(HTTP_STATUS_LOCKED)) { // HTTP 423 Locked
                     refreshBingoBoard();
                 }
             }
