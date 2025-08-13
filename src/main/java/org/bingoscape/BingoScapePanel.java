@@ -39,6 +39,10 @@ public class BingoScapePanel extends PluginPanel {
     // UI Constants
     private static final String NO_EVENTS_TEXT = "No active events found";
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy");
+    
+    // Color Constants
+    private static final Color GOLD_COLOR = new Color(255, 215, 0);
+    private static final Color SUCCESS_COLOR = new Color(34, 197, 94);
 
     // Components
     private final JPanel mainContentPanel = new JPanel(); // Main container for all content
@@ -451,13 +455,13 @@ public class BingoScapePanel extends PluginPanel {
 
                 JLabel titleLabel = new JLabel(eventData.getTitle());
                 titleLabel.setFont(FontManager.getRunescapeBoldFont());
-                titleLabel.setForeground(new Color(255, 215, 0)); // Gold color
+                titleLabel.setForeground(GOLD_COLOR);
                 titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 titlePanel.add(titleLabel);
 
                 // Add status indicator
                 JLabel statusLabel = new JLabel(eventData.isLocked() ? "🔒 Locked" : "✅ Active");
-                statusLabel.setForeground(eventData.isLocked() ? Color.LIGHT_GRAY : new Color(34, 197, 94));
+                statusLabel.setForeground(eventData.isLocked() ? Color.LIGHT_GRAY : SUCCESS_COLOR);
                 statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 titlePanel.add(statusLabel);
 
@@ -526,7 +530,7 @@ public class BingoScapePanel extends PluginPanel {
                             if (member.isLeader()) {
                                 String memberText = "• " + member.getRunescapeName() + " 👑";
                                 JLabel memberLabel = new JLabel(memberText);
-                                memberLabel.setForeground(new Color(255, 215, 0));
+                                memberLabel.setForeground(GOLD_COLOR);
                                 memberLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                                 membersPanel.add(memberLabel);
                                 membersPanel.add(Box.createVerticalStrut(2));
