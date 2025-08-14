@@ -20,5 +20,7 @@ public class Bingo {
     private Date updatedAt;
     private boolean locked;
     private boolean visible;
+    private String bingoType;
     private List<Tile> tiles;
+    private ProgressionMetadata progression;
 }

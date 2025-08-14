@@ -19,6 +19,7 @@ public class Tile {
     private String description;
     private int weight;
     private int index;
+    private Integer tier;
     private boolean isHidden;
     private Date createdAt;
     private Date updatedAt;
