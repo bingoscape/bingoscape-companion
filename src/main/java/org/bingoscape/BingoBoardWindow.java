@@ -3,6 +3,10 @@ package org.bingoscape;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import org.bingoscape.models.*;
+import org.bingoscape.builders.BingoBoardBuilder;
+import org.bingoscape.builders.BingoBoardBuilderFactory;
+import org.bingoscape.builders.BoardType;
+import org.bingoscape.builders.TileClickCallback;
 
 import javax.swing.*;
 import javax.swing.border.CompoundBorder;
@@ -94,7 +98,13 @@ public class BingoBoardWindow extends JFrame {
     private final ExecutorService executor;
     private Bingo currentBingo;
     private final Map<String, ImageIcon> imageCache = new ConcurrentHashMap<>();
-    private final Set<Integer> collapsedTiers = new HashSet<>();
+    
+    // Builder pattern integration
+    private final BingoBoardBuilderFactory builderFactory;
+    
+    // Pin mode for individual tiles
+    private boolean tilePinModeActive = false;
+    private JButton tilePinModeButton;
 
     // ========================================
     // CONSTRUCTOR AND WINDOW SETUP
@@ -104,6 +114,7 @@ public class BingoBoardWindow extends JFrame {
         this.plugin = plugin;
         this.currentBingo = bingo;
         this.executor = Executors.newFixedThreadPool(IMAGE_LOADING_THREADS);
+        this.builderFactory = new BingoBoardBuilderFactory(plugin, executor, imageCache);
 
         // Window setup
         String windowTitle = "BingoScape - " + bingo.getTitle();
@@ -162,6 +173,20 @@ public class BingoBoardWindow extends JFrame {
             }
         });
 
+        // Add tile pin mode button
+        tilePinModeButton = new JButton("📌🎯");
+        tilePinModeButton.setToolTipText("Pin Tiles Mode - Click tiles to add to side panel");
+        tilePinModeButton.setFocusPainted(false);
+        tilePinModeButton.setContentAreaFilled(false);
+        tilePinModeButton.setForeground(Color.WHITE);
+        tilePinModeButton.setBorder(new EmptyBorder(0, MEDIUM_SPACING, 0, MEDIUM_SPACING));
+
+        // Add hover effect for tile pin mode button
+        addHoverEffect(tilePinModeButton);
+
+        // Add tile pin mode toggle action
+        tilePinModeButton.addActionListener(e -> toggleTilePinMode());
+
         // Add reload button
         JButton reloadButton = new JButton();
         reloadButton.setIcon(new ImageIcon(getClass().getResource("/refresh_icon.png")));
@@ -176,6 +201,7 @@ public class BingoBoardWindow extends JFrame {
 
         // Create a container panel for the button to ensure proper spacing
         buttonContainer.add(pinButton);
+        buttonContainer.add(tilePinModeButton);
         buttonContainer.add(reloadButton);
 
         // Add hover effect
@@ -215,15 +241,24 @@ public class BingoBoardWindow extends JFrame {
     // BOARD LAYOUT AND DISPLAY METHODS
     // ========================================
     
+    /**
+     * Updates the board layout using the builder pattern.
+     * This method replaces the old string-based type detection with type-safe builders.
+     */
     private void updateBoardLayout(Bingo bingo) {
-        if ("progression".equals(bingo.getBingoType())) {
-            // Use vertical box layout for progression tiers
-            bingoBoard.setLayout(new BoxLayout(bingoBoard, BoxLayout.Y_AXIS));
-        } else {
-            // Use traditional grid layout for standard bingos
-            int rows = bingo.getRows() <= 0 ? DEFAULT_GRID_SIZE : bingo.getRows();
-            int cols = bingo.getColumns() <= 0 ? DEFAULT_GRID_SIZE : bingo.getColumns();
-            bingoBoard.setLayout(new GridLayout(rows, cols, SPACING, SPACING));
+        try {
+            // Create appropriate builder for the bingo type
+            BingoBoardBuilder builder = builderFactory.createBuilderWithValidation(bingo);
+            
+            // Set the tile click callback to handle both submission and pinning
+            builder.setTileClickCallback((tile, event) -> handleTileClick(tile, event));
+            
+            // Build the board using the selected builder
+            builder.buildBoard(bingo, bingoBoard);
+            
+        } catch (BingoBoardBuilderFactory.BuilderCreationException e) {
+            // Handle builder creation failure gracefully
+            handleBuilderError(bingo, e);
         }
     }
 
@@ -241,88 +276,48 @@ public class BingoBoardWindow extends JFrame {
         });
     }
 
-    // Updated to handle both standard grid and progressive tier layouts
+    /**
+     * Displays the bingo board using the builder pattern.
+     * This method is simplified as the builders now handle the display logic.
+     */
     private void displayBingoBoard(Bingo bingo) {
         SwingUtilities.invokeLater(() -> {
-            bingoBoard.removeAll();
-
             if (bingo == null || bingo.getTiles() == null) {
+                bingoBoard.removeAll();
+                bingoBoard.revalidate();
+                bingoBoard.repaint();
                 return;
             }
-
-            if ("progression".equals(bingo.getBingoType())) {
-                displayProgressiveBingo(bingo);
-            } else {
-                displayStandardBingo(bingo);
-            }
-
-            bingoBoard.revalidate();
-            bingoBoard.repaint();
+            
+            // The builder handles all display logic now
+            updateBoardLayout(bingo);
         });
     }
-
-    private void displayStandardBingo(Bingo bingo) {
-        // Sort tiles by position for standard grid layout
-        bingo.getTiles().sort((a, b) -> Integer.compare(a.getIndex(), b.getIndex()));
-
-        // Create all tile panels at once
-        for (Tile tile : bingo.getTiles()) {
-            // Skip hidden tiles
-            if (tile.isHidden()) {
-                JPanel hiddenPanel = createHiddenTilePanel();
-                bingoBoard.add(hiddenPanel);
-                continue;
-            }
-
-            JPanel tilePanel = createTilePanel(tile);
-            bingoBoard.add(tilePanel);
-        }
+    
+    /**
+     * Handles errors that occur during builder creation or board building.
+     * Provides fallback behavior to maintain functionality even when builders fail.
+     */
+    private void handleBuilderError(Bingo bingo, Exception e) {
+        System.err.println("Failed to create builder for bingo board: " + e.getMessage());
+        
+        // Clear the board and show error message
+        bingoBoard.removeAll();
+        
+        JLabel errorLabel = new JLabel("<html><center>Unable to display board<br>" + 
+            "Board type: " + (bingo.getBingoType() != null ? bingo.getBingoType() : "unknown") + 
+            "</center></html>", SwingConstants.CENTER);
+        errorLabel.setForeground(Color.RED);
+        errorLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+        
+        bingoBoard.setLayout(new BorderLayout());
+        bingoBoard.add(errorLabel, BorderLayout.CENTER);
+        
+        bingoBoard.revalidate();
+        bingoBoard.repaint();
     }
 
-    private void displayProgressiveBingo(Bingo bingo) {
-        // Group tiles by tier (only for unlocked tiers that have tiles)
-        Map<Integer, List<Tile>> tilesByTier = bingo.getTiles().stream()
-                .filter(tile -> !tile.isHidden())
-                .collect(Collectors.groupingBy(
-                        tile -> tile.getTier() != null ? tile.getTier() : 1,
-                        TreeMap::new,
-                        Collectors.toList()
-                ));
 
-        // Get unlocked tiers and all possible tiers from progression metadata
-        Set<Integer> unlockedTiers = new HashSet<>();
-        Set<Integer> allTiers = new TreeSet<>();
-        
-        if (bingo.getProgression() != null) {
-            if (bingo.getProgression().getUnlockedTiers() != null) {
-                unlockedTiers.addAll(bingo.getProgression().getUnlockedTiers());
-            }
-            
-            // Get all tiers from tier XP requirements (this tells us what tiers exist)
-            if (bingo.getProgression().getTierXpRequirements() != null) {
-                for (TierXpRequirement req : bingo.getProgression().getTierXpRequirements()) {
-                    allTiers.add(req.getTier());
-                }
-            }
-        }
-        
-        // If no progression metadata, fall back to tiers we have tiles for
-        if (allTiers.isEmpty()) {
-            allTiers.addAll(tilesByTier.keySet());
-        }
-
-        // Create tier sections for ALL tiers (both locked and unlocked)
-        for (Integer tierNum : allTiers) {
-            List<Tile> tierTiles = tilesByTier.getOrDefault(tierNum, new ArrayList<>());
-            boolean isUnlocked = unlockedTiers.contains(tierNum);
-
-            JPanel tierSection = createTierSection(tierNum, tierTiles, isUnlocked, bingo);
-            bingoBoard.add(tierSection);
-            
-            // Add spacing between tiers
-            bingoBoard.add(Box.createVerticalStrut(TIER_SPACING));
-        }
-    }
 
     // ========================================
     // TILE CREATION METHODS
@@ -427,345 +422,6 @@ public class BingoBoardWindow extends JFrame {
         return panel;
     }
 
-    // ========================================
-    // PROGRESSIVE BINGO - TIER METHODS
-    // ========================================
-    
-    private JPanel createTierSection(Integer tierNum, List<Tile> tierTiles, boolean isUnlocked, Bingo bingo) {
-        JPanel tierSection = new JPanel();
-        tierSection.setLayout(new BoxLayout(tierSection, BoxLayout.Y_AXIS));
-        tierSection.setOpaque(false);
-        tierSection.setBorder(new EmptyBorder(LARGE_SPACING, TIER_SECTION_PADDING, LARGE_SPACING, TIER_SECTION_PADDING));
-        
-        // Check if tier is collapsed
-        boolean isCollapsed = collapsedTiers.contains(tierNum);
-        
-        // Create tier header (clickable for unlocked tiers)
-        JPanel tierHeader = createTierHeader(tierNum, isUnlocked, isCollapsed, bingo);
-        tierSection.add(tierHeader);
-        
-        // Create content panel that can be shown/hidden
-        JPanel contentPanel = new JPanel();
-        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
-        contentPanel.setOpaque(false);
-        
-        contentPanel.add(Box.createVerticalStrut(LARGE_SPACING));
-        
-        if (isUnlocked) {
-            // Create tiles panel for unlocked tier
-            JPanel tilesPanel = createTierTilesPanel(tierTiles);
-            contentPanel.add(tilesPanel);
-        } else {
-            // Create locked tier panel (locked tiers are not collapsible)
-            JPanel lockedPanel = createLockedTierPanel(tierNum);
-            contentPanel.add(lockedPanel);
-        }
-        
-        // Only add content panel if tier is not collapsed (or if it's locked)
-        if (!isCollapsed || !isUnlocked) {
-            tierSection.add(contentPanel);
-        }
-        
-        // Add click handler to header for unlocked tiers only
-        if (isUnlocked) {
-            addTierHeaderClickHandler(tierHeader, tierNum, tierSection, contentPanel);
-        }
-        
-        return tierSection;
-    }
-
-    private JPanel createTierHeader(Integer tierNum, boolean isUnlocked, boolean isCollapsed, Bingo bingo) {
-        JPanel header = new JPanel(new BorderLayout());
-        header.setOpaque(true);
-        header.setBackground(new Color(45, 55, 72));
-        header.setBorder(new CompoundBorder(
-            new LineBorder(isUnlocked ? new Color(59, 130, 246) : new Color(100, 100, 100), 1, true),
-            new EmptyBorder(LARGE_SPACING, TIER_HEADER_PADDING, LARGE_SPACING, TIER_HEADER_PADDING)
-        ));
-        
-        // Left side: Tier info
-        JPanel tierInfoPanel = createTierInfoPanel(tierNum, bingo);
-        header.add(tierInfoPanel, BorderLayout.WEST);
-        
-        // Right side: Status and collapse indicator
-        JPanel tierStatusPanel = createTierStatusPanel(isUnlocked, isCollapsed);
-        header.add(tierStatusPanel, BorderLayout.EAST);
-        
-        return header;
-    }
-    
-    private JPanel createTierInfoPanel(Integer tierNum, Bingo bingo) {
-        JPanel tierInfoPanel = new JPanel();
-        tierInfoPanel.setLayout(new BoxLayout(tierInfoPanel, BoxLayout.Y_AXIS));
-        tierInfoPanel.setOpaque(false);
-        
-        // Tier title section
-        JPanel tierTitlePanel = createTierTitlePanel(tierNum);
-        tierInfoPanel.add(tierTitlePanel);
-        
-        // Progress section (if available)
-        addProgressInfoIfAvailable(tierInfoPanel, tierNum, bingo);
-        
-        return tierInfoPanel;
-    }
-    
-    private JPanel createTierTitlePanel(Integer tierNum) {
-        JPanel tierTitlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        tierTitlePanel.setOpaque(false);
-        
-        // Tier number circle
-        JLabel tierIcon = createTierIcon(tierNum);
-        JLabel tierLabel = createTierLabel(tierNum);
-        
-        tierTitlePanel.add(tierIcon);
-        tierTitlePanel.add(tierLabel);
-        
-        return tierTitlePanel;
-    }
-    
-    private JLabel createTierIcon(Integer tierNum) {
-        JLabel tierIcon = new JLabel(String.valueOf(tierNum));
-        tierIcon.setOpaque(true);
-        tierIcon.setBackground(new Color(59, 130, 246));
-        tierIcon.setForeground(Color.WHITE);
-        tierIcon.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        tierIcon.setBorder(new EmptyBorder(MEDIUM_SPACING, TIER_ICON_PADDING, MEDIUM_SPACING, TIER_ICON_PADDING));
-        tierIcon.setHorizontalAlignment(SwingConstants.CENTER);
-        return tierIcon;
-    }
-    
-    private JLabel createTierLabel(Integer tierNum) {
-        JLabel tierLabel = new JLabel("Tier " + tierNum);
-        tierLabel.setForeground(Color.WHITE);
-        tierLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
-        tierLabel.setBorder(new EmptyBorder(0, TIER_LABEL_LEFT_MARGIN, 0, 0));
-        return tierLabel;
-    }
-    
-    private void addProgressInfoIfAvailable(JPanel leftPanel, Integer tierNum, Bingo bingo) {
-        if (bingo.getProgression() != null) {
-            String progressText = getProgressText(tierNum, bingo.getProgression());
-            if (!progressText.isEmpty()) {
-                JLabel progressLabel = new JLabel(progressText);
-                progressLabel.setForeground(new Color(156, 163, 175));
-                progressLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-                progressLabel.setBorder(new EmptyBorder(2, 0, 0, 0));
-                leftPanel.add(progressLabel);
-            }
-        }
-    }
-    
-    private JPanel createTierStatusPanel(boolean isUnlocked, boolean isCollapsed) {
-        JPanel tierStatusPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, MEDIUM_SPACING, 0));
-        tierStatusPanel.setOpaque(false);
-        
-        // Add collapse indicator for unlocked tiers
-        if (isUnlocked) {
-            JLabel collapseIndicator = createCollapseIndicator(isCollapsed);
-            tierStatusPanel.add(collapseIndicator);
-        }
-        
-        // Lock/Unlock status
-        JLabel statusLabel = createStatusLabel(isUnlocked);
-        tierStatusPanel.add(statusLabel);
-        
-        return tierStatusPanel;
-    }
-    
-    private JLabel createCollapseIndicator(boolean isCollapsed) {
-        JLabel collapseIndicator = new JLabel(isCollapsed ? "▶" : "▼");
-        collapseIndicator.setForeground(Color.WHITE);
-        collapseIndicator.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-        return collapseIndicator;
-    }
-    
-    private JLabel createStatusLabel(boolean isUnlocked) {
-        JLabel statusLabel = new JLabel(isUnlocked ? "Unlocked" : "Locked");
-        statusLabel.setOpaque(true);
-        statusLabel.setBackground(isUnlocked ? new Color(34, 197, 94) : new Color(107, 114, 128));
-        statusLabel.setForeground(Color.WHITE);
-        statusLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-        statusLabel.setBorder(new EmptyBorder(SMALL_SPACING, STATUS_BADGE_PADDING, SMALL_SPACING, STATUS_BADGE_PADDING));
-        statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        return statusLabel;
-    }
-
-    private void addTierHeaderClickHandler(JPanel tierHeader, Integer tierNum, JPanel tierSection, JPanel contentPanel) {
-        tierHeader.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                toggleTierCollapse(tierNum, tierSection, contentPanel);
-            }
-            
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent e) {
-                tierHeader.setCursor(new Cursor(Cursor.HAND_CURSOR));
-            }
-            
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent e) {
-                tierHeader.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
-            }
-        });
-    }
-    
-    private void toggleTierCollapse(Integer tierNum, JPanel tierSection, JPanel contentPanel) {
-        boolean isCurrentlyCollapsed = collapsedTiers.contains(tierNum);
-        
-        if (isCurrentlyCollapsed) {
-            // Expand: remove from collapsed set and add content panel
-            collapsedTiers.remove(tierNum);
-            tierSection.add(contentPanel);
-        } else {
-            // Collapse: add to collapsed set and remove content panel
-            collapsedTiers.add(tierNum);
-            tierSection.remove(contentPanel);
-        }
-        
-        // Refresh the display to show changes
-        refreshTierDisplay();
-    }
-    
-    private void refreshTierDisplay() {
-        SwingUtilities.invokeLater(() -> {
-            // Re-display the current bingo to refresh the tier headers with updated collapse states
-            if (currentBingo != null) {
-                displayBingoBoard(currentBingo);
-            }
-        });
-    }
-
-    private JPanel createTierTilesPanel(List<Tile> tierTiles) {
-        JPanel tilesPanel = new JPanel();
-        
-        // Handle case where there are no tiles (shouldn't happen for unlocked tiers, but safety check)
-        if (tierTiles.isEmpty()) {
-            tilesPanel.setLayout(new BorderLayout());
-            tilesPanel.setOpaque(false);
-            JLabel noTilesLabel = new JLabel("No tiles available");
-            noTilesLabel.setForeground(new Color(156, 163, 175));
-            noTilesLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            tilesPanel.add(noTilesLabel, BorderLayout.CENTER);
-            return tilesPanel;
-        }
-        
-        // Calculate tiles per row (3 tiles as shown in screenshot)
-        int tilesPerRow = TILES_PER_ROW_PROGRESSIVE;
-        int rows = (int) Math.ceil((double) tierTiles.size() / tilesPerRow);
-        
-        tilesPanel.setLayout(new GridLayout(rows, tilesPerRow, LARGE_SPACING, LARGE_SPACING));
-        tilesPanel.setOpaque(false);
-        tilesPanel.setBorder(new EmptyBorder(0, TILES_PANEL_SIDE_MARGIN, 0, TILES_PANEL_SIDE_MARGIN));
-        
-        // Sort tiles by index
-        tierTiles.sort((a, b) -> Integer.compare(a.getIndex(), b.getIndex()));
-        
-        for (Tile tile : tierTiles) {
-            JPanel tilePanel = createProgressiveTilePanel(tile);
-            tilesPanel.add(tilePanel);
-        }
-        
-        // Fill remaining slots with empty panels if needed
-        int remainingSlots = (rows * tilesPerRow) - tierTiles.size();
-        for (int i = 0; i < remainingSlots; i++) {
-            JPanel emptyPanel = new JPanel();
-            emptyPanel.setOpaque(false);
-            tilesPanel.add(emptyPanel);
-        }
-        
-        return tilesPanel;
-    }
-
-    private JPanel createLockedTierPanel(Integer tierNum) {
-        JPanel lockedPanel = new JPanel();
-        lockedPanel.setLayout(new BoxLayout(lockedPanel, BoxLayout.Y_AXIS));
-        lockedPanel.setOpaque(false);
-        lockedPanel.setBorder(new EmptyBorder(LOCKED_PANEL_PADDING, LOCKED_PANEL_PADDING, LOCKED_PANEL_PADDING, LOCKED_PANEL_PADDING));
-        
-        // Lock icon (using text for simplicity)
-        JLabel lockIcon = new JLabel("🔒");
-        lockIcon.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, LOCK_ICON_FONT_SIZE));
-        lockIcon.setHorizontalAlignment(SwingConstants.CENTER);
-        lockIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        // Dynamic message based on tier
-        String previousTier = tierNum > 1 ? "Tier " + (tierNum - 1) : "previous tiers";
-        JLabel lockMessage = new JLabel("Complete more tiles in " + previousTier + " to unlock these tiles");
-        lockMessage.setForeground(new Color(156, 163, 175));
-        lockMessage.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
-        lockMessage.setHorizontalAlignment(SwingConstants.CENTER);
-        lockMessage.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        lockedPanel.add(lockIcon);
-        lockedPanel.add(Box.createVerticalStrut(LARGE_SPACING));
-        lockedPanel.add(lockMessage);
-        
-        return lockedPanel;
-    }
-
-    private JPanel createProgressiveTilePanel(Tile tile) {
-        // Create a specialized tile panel for progressive layout (no tier indicator needed)
-        int tileSize = PROGRESSIVE_TILE_SIZE; // Fixed size for progressive layout
-        
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setPreferredSize(new Dimension(tileSize, tileSize));
-        panel.setMinimumSize(new Dimension(tileSize, tileSize));
-        
-        // Set background based on submission status
-        Color backgroundColor = getTileBackgroundColor(tile.getSubmission());
-        panel.setBackground(backgroundColor);
-        
-        // Set border based on submission status
-        panel.setBorder(new CompoundBorder(
-                new LineBorder(getTileBorderColor(tile.getSubmission()), 2),
-                new EmptyBorder(SMALL_SPACING, SMALL_SPACING, SMALL_SPACING, SMALL_SPACING)
-        ));
-        
-        // Set tooltip
-        panel.setToolTipText(createDetailedTooltip(tile));
-        
-        // Add image if available, otherwise show title
-        if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
-            loadTileImage(panel, tile, tileSize);
-        } else {
-            JLabel titleLabel = new JLabel("<html><center>" + tile.getTitle() + "</center></html>", SwingConstants.CENTER);
-            titleLabel.setForeground(Color.WHITE);
-            panel.add(titleLabel, BorderLayout.CENTER);
-        }
-        
-        // Add XP value indicator (no tier indicator for progressive tiles)
-        JPanel bottomPanel = new JPanel(new BorderLayout());
-        bottomPanel.setOpaque(false);
-        JLabel xpLabel = new JLabel(String.valueOf(tile.getWeight()) + " XP");
-        xpLabel.setForeground(GOLD_COLOR);
-        xpLabel.setFont(new Font(xpLabel.getFont().getName(), Font.BOLD, SMALL_FONT_SIZE));
-        xpLabel.setHorizontalAlignment(SwingConstants.RIGHT);
-        bottomPanel.add(xpLabel, BorderLayout.EAST);
-        panel.add(bottomPanel, BorderLayout.SOUTH);
-        
-        // Add status overlay
-        if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null &&
-                tile.getSubmission().getStatus() != TileSubmissionType.NOT_SUBMITTED) {
-            addStatusOverlay(panel, tile.getSubmission());
-        }
-        
-        // Add click behavior
-        addTilePanelListeners(panel, tile);
-        
-        return panel;
-    }
-
-    private String getProgressText(Integer tierNum, ProgressionMetadata progression) {
-        if (progression.getTierProgress() != null) {
-            for (TierProgress tp : progression.getTierProgress()) {
-                if (tp.getTier().equals(tierNum)) {
-                    // For now, show simple XP progress
-                    return "0/3 XP completed (5 XP required to unlock next tier)";
-                }
-            }
-        }
-        return "";
-    }
 
     // Create a detailed HTML tooltip for the tile
     // ========================================
@@ -1471,6 +1127,83 @@ public class BingoBoardWindow extends JFrame {
 
         previewDialog.add(buttonPanel, BorderLayout.SOUTH);
         previewDialog.setVisible(true);
+    }
+
+    // ========================================
+    // TILE PINNING FUNCTIONALITY
+    // ========================================
+    
+    /**
+     * Handles tile clicks based on current mode (submission or pinning).
+     * Also handles shift-click to pin tiles in normal mode.
+     */
+    private void handleTileClick(Tile tile, java.awt.event.MouseEvent event) {
+        // Check if shift is pressed
+        boolean shiftPressed = event != null && event.isShiftDown();
+        
+        if (tilePinModeActive || shiftPressed) {
+            // In pin mode or shift-clicked, add tile to side panel
+            if (plugin.getPanel().pinnedTileIds.contains(tile.getId().toString())) {
+                // Tile is already pinned, remove it
+                plugin.getPanel().removePinnedTile(tile.getId().toString());
+                showStatusMessage("Tile unpinned: " + tile.getTitle());
+            } else {
+                // Pin the tile
+                plugin.getPanel().addPinnedTile(tile);
+                String message = shiftPressed ? 
+                    "Tile pinned (Shift+Click): " + tile.getTitle() : 
+                    "Tile pinned: " + tile.getTitle();
+                showStatusMessage(message);
+            }
+        } else {
+            // Normal mode, show submission dialog
+            showSubmissionDialog(tile);
+        }
+    }
+    
+    /**
+     * Toggles the tile pin mode on/off.
+     */
+    private void toggleTilePinMode() {
+        tilePinModeActive = !tilePinModeActive;
+        
+        if (tilePinModeActive) {
+            tilePinModeButton.setContentAreaFilled(true);
+            tilePinModeButton.setBackground(ACCEPTED_BG_COLOR);
+            tilePinModeButton.setToolTipText("Pin Mode Active - Click tiles to pin/unpin");
+            showStatusMessage("Pin mode activated - Click tiles to add them to the side panel");
+        } else {
+            tilePinModeButton.setContentAreaFilled(false);
+            tilePinModeButton.setToolTipText("Pin Tiles Mode - Click tiles to add to side panel");
+            showStatusMessage("Pin mode deactivated - Click tiles to open submission dialogs");
+        }
+    }
+    
+    /**
+     * Shows a temporary status message to the user.
+     */
+    private void showStatusMessage(String message) {
+        // Create a temporary label that shows the message
+        JLabel statusLabel = new JLabel(message);
+        statusLabel.setForeground(GOLD_COLOR);
+        statusLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        
+        // Add it to the title panel temporarily
+        JPanel titlePanel = (JPanel) ((JPanel) getContentPane()).getComponent(0);
+        titlePanel.add(statusLabel, BorderLayout.SOUTH);
+        
+        // Remove it after 2 seconds
+        Timer timer = new Timer(2000, e -> {
+            titlePanel.remove(statusLabel);
+            titlePanel.revalidate();
+            titlePanel.repaint();
+        });
+        timer.setRepeats(false);
+        timer.start();
+        
+        titlePanel.revalidate();
+        titlePanel.repaint();
     }
 
     // Clean up resources when window is closed

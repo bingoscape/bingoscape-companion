@@ -1,13 +1,19 @@
 package org.bingoscape.models;
 
-import lombok.Data; /**
- * Represents progress towards a goal
+import lombok.Data;
+
+/**
+ * Represents the progress information for a goal.
+ * 
+ * Contains both approved progress (confirmed progress) and total progress
+ * (including pending submissions), along with calculated percentages and completion status.
+ * 
+ * @author BingoScape Development Team
  */
 @Data
 public class GoalProgress {
-    private String id;
-    private int currentValue;
-    private int targetValue;
-    private String description;
-    private int progress; // Progress as percentage (0-100)
+    private int approvedProgress;
+    private int totalProgress;
+    private double approvedPercentage;
+    private boolean isCompleted;
 }

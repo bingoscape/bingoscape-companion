@@ -92,4 +92,22 @@ public interface BingoScapeConfig extends Config
             description = "The ID of the pinned bingo to display on startup"
     )
     void pinnedBingoId(String id);
+
+    @ConfigItem(
+            keyName = "pinnedTileIds",
+            name = "Pinned Tile IDs",
+            description = "Comma-separated list of pinned tile IDs",
+            hidden = true
+    )
+    default String pinnedTileIds()
+    {
+        return "";
+    }
+
+    @ConfigItem(
+            keyName = "pinnedTileIds",
+            name = "Pinned Tile IDs",
+            description = "Comma-separated list of pinned tile IDs"
+    )
+    void pinnedTileIds(String ids);
 }

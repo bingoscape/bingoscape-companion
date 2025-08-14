@@ -7,4 +7,5 @@ public class Goal {
     private String id;
     private String description;
     private int targetValue;
+    private GoalProgress progress;
 }
