@@ -351,6 +351,10 @@ public class BingoScapePlugin extends Plugin {
         config.pinnedBingoId("");
     }
 
+    public BingoScapePanel getPanel() {
+        return panel;
+    }
+
     @Provides
     BingoScapeConfig provideConfig(ConfigManager configManager) {
         return configManager.getConfig(BingoScapeConfig.class);
