@@ -10,6 +10,11 @@ import org.bingoscape.models.Role;
 import org.bingoscape.models.TeamMember;
 import org.bingoscape.models.Tile;
 import org.bingoscape.models.TileSubmissionType;
+import org.bingoscape.ui.ColorPalette;
+import org.bingoscape.ui.UIConstants;
+import org.bingoscape.ui.UIEffects;
+import org.bingoscape.ui.PinnedTilesManager;
+import org.bingoscape.ui.TileListItemFactory;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -21,6 +26,8 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.net.URL;
+import java.awt.MouseInfo;
+import java.awt.Point;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Set;
@@ -35,61 +42,44 @@ import java.util.Date;
 import javax.swing.DefaultComboBoxModel;
 
 public class BingoScapePanel extends PluginPanel {
-    // Layout Constants
-    private static final int BORDER_SPACING = 10;
-    private static final int COMPONENT_SPACING = 12;
-    private static final int SECTION_SPACING = 14;
-    private static final int CARD_SPACING = 10;
-    private static final int PINNED_SECTION_SPACING = 8;
-    private static final int QUICK_ACTION_SPACING = 6;
+    // Note: Layout and color constants moved to UIConstants and ColorPalette classes
 
-    // Button Constants
-    private static final int BUTTON_SIZE = 24;
-    private static final int QUICK_ACTION_BUTTON_SIZE = 28;
-    private static final int MINI_TILE_SIZE = 50;
-    private static final int PINNED_TILE_HEIGHT = 55;
-    private static final int FADE_STEP = 10;
-    private static final int FADE_TIMER_DELAY = 50;
-    private static final int MAX_ALPHA = 255;
-
-    // UI Constants
-    private static final String NO_EVENTS_TEXT = "No active events found";
-    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy");
-
-    // Color Constants
-    private static final Color GOLD_COLOR = new Color(255, 215, 0);
-    private static final Color SUCCESS_COLOR = new Color(34, 197, 94);
-    private static final Color ACCENT_BLUE = new Color(59, 130, 246);
-    private static final Color WARNING_YELLOW = new Color(234, 179, 8);
-    private static final Color ERROR_RED = new Color(239, 68, 68);
-    private static final Color PINNED_TILE_BG = new Color(45, 55, 72);
-    private static final Color CARD_BG = new Color(55, 65, 81);
-    private static final Color HEADER_BG = new Color(31, 41, 55);
-    private static final Color BORDER_COLOR = new Color(75, 85, 99);
+    // Legacy constants for backward compatibility (will be removed)
+    @Deprecated private static final int BUTTON_SIZE = UIConstants.BUTTON_SIZE;
+    @Deprecated private static final int QUICK_ACTION_BUTTON_SIZE = UIConstants.QUICK_ACTION_BUTTON_SIZE;
+    @Deprecated private static final Color GOLD_COLOR = ColorPalette.GOLD;
+    @Deprecated private static final Color SUCCESS_COLOR = ColorPalette.SUCCESS;
+    @Deprecated private static final Color ACCENT_BLUE = ColorPalette.ACCENT_BLUE;
+    @Deprecated private static final Color WARNING_YELLOW = ColorPalette.WARNING_YELLOW;
+    @Deprecated private static final Color ERROR_RED = ColorPalette.ERROR_RED;
+    @Deprecated private static final Color PINNED_TILE_BG = ColorPalette.PINNED_TILE_BG;
+    @Deprecated private static final Color CARD_BG = ColorPalette.CARD_BG;
+    @Deprecated private static final Color HEADER_BG = ColorPalette.HEADER_BG;
+    @Deprecated private static final Color BORDER_COLOR = ColorPalette.BORDER;
 
     // Components
-    private final JPanel mainContentPanel = new JPanel(); // Main container for all content
-    private final JPanel headerPanel = new JPanel(); // New consolidated header
-    private JPanel pinnedTilesSection; // New pinned tiles section
+    private final JPanel mainContentPanel = new JPanel();
+    private final JPanel headerPanel = new JPanel();
     private JPanel eventsPanel;
     private JPanel bingoPanel;
     private final JPanel eventDetailsPanel = new JPanel();
     private final JComboBox<EventData> eventSelector = new JComboBox<>();
     private final JComboBox<Bingo> bingoSelector = new JComboBox<>();
     private JButton showBingoBoardButton;
-    private JButton reloadEventsButton; // New reload events button
-    private JLabel loadingLabel; // New loading label
-    private final Timer fadeTimer; // Timer for smooth transitions
+    private JButton reloadEventsButton;
+    private JLabel loadingLabel;
+    private final Timer fadeTimer;
 
-    // New UI components for enhanced functionality
+    // UI components for enhanced functionality
     private JButton screenshotButton;
     private JButton refreshButton;
-    private JScrollPane pinnedTilesScrollPane;
-    private JPanel pinnedTilesContainer;
 
-    // Pinned tiles management
-    public final Set<String> pinnedTileIds = new HashSet<>();
-    private final List<Tile> pinnedTiles = new ArrayList<>();
+    // Managers
+    private PinnedTilesManager pinnedTilesManager;
+    private TileListItemFactory tileFactory;
+
+    // Legacy pinned tiles access (deprecated - use pinnedTilesManager instead)
+    @Deprecated public final Set<String> pinnedTileIds = new HashSet<>();
 
     // Reference to plugin and other resources
     private final BingoScapePlugin plugin;
@@ -103,15 +93,20 @@ public class BingoScapePanel extends PluginPanel {
         this.executor = Executors.newSingleThreadScheduledExecutor();
 
         // Initialize fade timer
-        this.fadeTimer = new Timer(FADE_TIMER_DELAY, null);
+        this.fadeTimer = new Timer(UIConstants.FADE_TIMER_DELAY, null);
         fadeTimer.setRepeats(true);
 
-        // Load pinned tiles from config
-        loadPinnedTilesFromConfig();
+        // Initialize managers and factories
+        this.tileFactory = new TileListItemFactory(plugin);
+        this.pinnedTilesManager = new PinnedTilesManager(
+            plugin,
+            this::showTileQuickActionsForPinnedTile,
+            this::showBingoBoardFromPinnedTiles
+        );
 
         // Initialize components
         initializeComponents();
-        
+
         // Build the complete panel
         buildPanel();
     }
@@ -123,17 +118,6 @@ public class BingoScapePanel extends PluginPanel {
         screenshotButton = createScreenshotButton();
         refreshButton = createRefreshButton();
         loadingLabel = createLoadingLabel();
-
-        // Setup pinned tiles container
-        pinnedTilesContainer = new JPanel();
-        pinnedTilesContainer.setLayout(new BoxLayout(pinnedTilesContainer, BoxLayout.Y_AXIS));
-        pinnedTilesContainer.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-        pinnedTilesScrollPane = new JScrollPane(pinnedTilesContainer);
-        pinnedTilesScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        pinnedTilesScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        pinnedTilesScrollPane.setBorder(null);
-        pinnedTilesScrollPane.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
         // Configure dropdowns
         configureEventSelector();
@@ -166,10 +150,9 @@ public class BingoScapePanel extends PluginPanel {
         container.add(Box.createVerticalGlue());
         
         add(container, BorderLayout.CENTER);
-        
-        // Initially hide board section and pinned section
+
+        // Initially hide board section
         bingoPanel.setVisible(false);
-        pinnedTilesSection.setVisible(false);
     }
 
     // Helper methods for clean panel building
@@ -273,51 +256,8 @@ public class BingoScapePanel extends PluginPanel {
     }
     
     private JPanel createPinnedTilesSection() {
-        pinnedTilesSection = new JPanel(new BorderLayout(0, 8));
-        pinnedTilesSection.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        pinnedTilesSection.setBorder(new CompoundBorder(
-            new LineBorder(BORDER_COLOR, 1, true),
-            new EmptyBorder(10, 10, 10, 10)
-        ));
-        pinnedTilesSection.setAlignmentX(Component.LEFT_ALIGNMENT);
-        
-        // Header
-        JPanel pinnedHeader = new JPanel(new BorderLayout());
-        pinnedHeader.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        pinnedHeader.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        
-        JLabel pinnedLabel = new JLabel("📌 Pinned");
-        pinnedLabel.setForeground(Color.WHITE);
-        pinnedLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-        
-        JLabel collapseIcon = new JLabel("▼");
-        collapseIcon.setForeground(Color.LIGHT_GRAY);
-        
-        pinnedHeader.add(pinnedLabel, BorderLayout.WEST);
-        pinnedHeader.add(collapseIcon, BorderLayout.EAST);
-        
-        // Toggle functionality
-        pinnedHeader.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                boolean isVisible = pinnedTilesScrollPane.isVisible();
-                pinnedTilesScrollPane.setVisible(!isVisible);
-                collapseIcon.setText(isVisible ? "▶" : "▼");
-                revalidate();
-                repaint();
-            }
-        });
-        
-        // Set scroll pane size - larger to show more tiles with overflow
-        pinnedTilesScrollPane.setPreferredSize(new Dimension(0, 250));
-        pinnedTilesScrollPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 400)); // Allow expansion up to 400px
-        
-        pinnedTilesSection.add(pinnedHeader, BorderLayout.NORTH);
-        pinnedTilesSection.add(pinnedTilesScrollPane, BorderLayout.CENTER);
-        
-        updatePinnedTilesDisplay();
-        
-        return pinnedTilesSection;
+        // Use the PinnedTilesManager to create and manage the pinned tiles section
+        return pinnedTilesManager.getPinnedTilesSection();
     }
 
     private JLabel createLoadingLabel() {
@@ -448,30 +388,17 @@ public class BingoScapePanel extends PluginPanel {
     private JButton createReloadEventsButton() {
         JButton button = new JButton("🔄");
         button.setToolTipText("Reload Events");
-        button.setPreferredSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
-        button.setMaximumSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
-        button.setMinimumSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
+        button.setPreferredSize(new Dimension(UIConstants.BUTTON_SIZE, UIConstants.BUTTON_SIZE));
+        button.setMaximumSize(new Dimension(UIConstants.BUTTON_SIZE, UIConstants.BUTTON_SIZE));
+        button.setMinimumSize(new Dimension(UIConstants.BUTTON_SIZE, UIConstants.BUTTON_SIZE));
         button.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
         button.setFocusPainted(false);
         button.setContentAreaFilled(false);
-        button.setBorder(new LineBorder(BORDER_COLOR, 1, true));
+        button.setBorder(new LineBorder(ColorPalette.BORDER, 1, true));
         button.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        // Add hover effect
-        button.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                if (button.isEnabled()) {
-                    button.setContentAreaFilled(true);
-                    button.setBackground(ACCENT_BLUE);
-                }
-            }
-
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                button.setContentAreaFilled(false);
-            }
-        });
+        // Add hover effect using UIEffects utility
+        UIEffects.addButtonHoverEffect(button);
 
         button.addActionListener(e -> handleReloadButtonClick());
 
@@ -481,24 +408,14 @@ public class BingoScapePanel extends PluginPanel {
     private JButton createScreenshotButton() {
         JButton button = new JButton("📷");
         button.setToolTipText("Take Screenshot");
-        button.setPreferredSize(new Dimension(QUICK_ACTION_BUTTON_SIZE, QUICK_ACTION_BUTTON_SIZE));
+        button.setPreferredSize(new Dimension(UIConstants.QUICK_ACTION_BUTTON_SIZE, UIConstants.QUICK_ACTION_BUTTON_SIZE));
         button.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
         button.setFocusPainted(false);
         button.setContentAreaFilled(false);
-        button.setBorder(new LineBorder(BORDER_COLOR, 1, true));
-        button.setBackground(CARD_BG);
+        button.setBorder(new LineBorder(ColorPalette.BORDER, 1, true));
+        button.setBackground(ColorPalette.CARD_BG);
 
-        button.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                button.setContentAreaFilled(true);
-                button.setBackground(ACCENT_BLUE);
-            }
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                button.setContentAreaFilled(false);
-            }
-        });
+        UIEffects.addButtonHoverEffect(button);
 
         button.addActionListener(e -> openScreenshotDialog());
         return button;
@@ -508,24 +425,14 @@ public class BingoScapePanel extends PluginPanel {
     private JButton createRefreshButton() {
         JButton button = new JButton("⚙️");
         button.setToolTipText("Settings");
-        button.setPreferredSize(new Dimension(QUICK_ACTION_BUTTON_SIZE, QUICK_ACTION_BUTTON_SIZE));
+        button.setPreferredSize(new Dimension(UIConstants.QUICK_ACTION_BUTTON_SIZE, UIConstants.QUICK_ACTION_BUTTON_SIZE));
         button.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
         button.setFocusPainted(false);
         button.setContentAreaFilled(false);
-        button.setBorder(new LineBorder(BORDER_COLOR, 1, true));
-        button.setBackground(CARD_BG);
+        button.setBorder(new LineBorder(ColorPalette.BORDER, 1, true));
+        button.setBackground(ColorPalette.CARD_BG);
 
-        button.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                button.setContentAreaFilled(true);
-                button.setBackground(ACCENT_BLUE);
-            }
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                button.setContentAreaFilled(false);
-            }
-        });
+        UIEffects.addButtonHoverEffect(button);
 
         button.addActionListener(e -> refreshCurrentBoard());
         return button;
@@ -542,7 +449,7 @@ public class BingoScapePanel extends PluginPanel {
     private void startFadeOutAnimation(SelectionState savedState) {
         clearFadeTimerListeners();
         fadeTimer.addActionListener(evt -> {
-            float alpha = eventSelector.getForeground().getAlpha() - FADE_STEP;
+            float alpha = eventSelector.getForeground().getAlpha() - UIConstants.FADE_STEP;
             if (alpha <= 0) {
                 fadeTimer.stop();
                 executor.submit(() -> {
@@ -550,7 +457,7 @@ public class BingoScapePanel extends PluginPanel {
                     SwingUtilities.invokeLater(() -> completeReload(savedState));
                 });
             } else {
-                eventSelector.setForeground(new Color(MAX_ALPHA, MAX_ALPHA, MAX_ALPHA, (int)alpha));
+                eventSelector.setForeground(new Color(UIConstants.MAX_ALPHA, UIConstants.MAX_ALPHA, UIConstants.MAX_ALPHA, (int)alpha));
             }
         });
         fadeTimer.start();
@@ -565,11 +472,11 @@ public class BingoScapePanel extends PluginPanel {
     private void startFadeInAnimation() {
         clearFadeTimerListeners();
         fadeTimer.addActionListener(evt -> {
-            float fadeInAlpha = eventSelector.getForeground().getAlpha() + FADE_STEP;
-            if (fadeInAlpha >= MAX_ALPHA) {
+            float fadeInAlpha = eventSelector.getForeground().getAlpha() + UIConstants.FADE_STEP;
+            if (fadeInAlpha >= UIConstants.MAX_ALPHA) {
                 fadeTimer.stop();
             }
-            eventSelector.setForeground(new Color(MAX_ALPHA, MAX_ALPHA, MAX_ALPHA, (int)fadeInAlpha));
+            eventSelector.setForeground(new Color(UIConstants.MAX_ALPHA, UIConstants.MAX_ALPHA, UIConstants.MAX_ALPHA, (int)fadeInAlpha));
         });
         fadeTimer.start();
     }
@@ -679,6 +586,16 @@ public class BingoScapePanel extends PluginPanel {
             bingoBoardWindow = new BingoBoardWindow(plugin, bingo);
             bingoBoardWindow.setVisible(true);
         });
+    }
+
+    /**
+     * Helper method for PinnedTilesManager to show bingo board.
+     */
+    private void showBingoBoardFromPinnedTiles() {
+        Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
+        if (selectedBingo != null) {
+            showBingoBoardWindow(selectedBingo);
+        }
     }
 
     public void updateEventsList(List<EventData> events) {
@@ -1003,478 +920,63 @@ public class BingoScapePanel extends PluginPanel {
     }
 
     public void addPinnedTile(Tile tile) {
-        if (!pinnedTileIds.contains(tile.getId().toString())) {
-            pinnedTileIds.add(tile.getId().toString());
-            pinnedTiles.add(tile);
-            savePinnedTilesToConfig();
-            updatePinnedTilesDisplay();
-        }
+        pinnedTilesManager.addPinnedTile(tile);
+        // Update legacy field for backward compatibility
+        pinnedTileIds.clear();
+        pinnedTileIds.addAll(pinnedTilesManager.getPinnedTileIds());
     }
 
     public void removePinnedTile(String tileId) {
-        if (pinnedTileIds.remove(tileId)) {
-            pinnedTiles.removeIf(tile -> tile.getId().toString().equals(tileId));
-            savePinnedTilesToConfig();
-            updatePinnedTilesDisplay();
-        }
-    }
-
-    private void loadPinnedTilesFromConfig() {
-        String configPinnedTileIds = plugin.getConfig().pinnedTileIds();
-        if (configPinnedTileIds != null && !configPinnedTileIds.trim().isEmpty()) {
-            String[] tileIds = configPinnedTileIds.split(",");
-            for (String tileId : tileIds) {
-                String trimmedId = tileId.trim();
-                if (!trimmedId.isEmpty()) {
-                    pinnedTileIds.add(trimmedId);
-                }
-            }
-        }
-    }
-
-    private void savePinnedTilesToConfig() {
-        String pinnedTileIdsString = String.join(",", pinnedTileIds);
-        plugin.getConfig().pinnedTileIds(pinnedTileIdsString);
+        pinnedTilesManager.removePinnedTile(tileId);
+        // Update legacy field for backward compatibility
+        pinnedTileIds.clear();
+        pinnedTileIds.addAll(pinnedTilesManager.getPinnedTileIds());
     }
 
     public void refreshPinnedTiles() {
-        // Refresh pinned tiles when bingo data changes
-        // Find tiles that match pinned IDs from current bingo
-        pinnedTiles.clear();
-        if (currentBingo != null && !pinnedTileIds.isEmpty()) {
-            for (Tile tile : currentBingo.getTiles()) {
-                if (pinnedTileIds.contains(tile.getId().toString())) {
-                    pinnedTiles.add(tile);
-                }
-            }
-        }
-        updatePinnedTilesDisplay();
+        pinnedTilesManager.refreshPinnedTiles(currentBingo);
+        // Update legacy field for backward compatibility
+        pinnedTileIds.clear();
+        pinnedTileIds.addAll(pinnedTilesManager.getPinnedTileIds());
     }
 
-    private void updatePinnedTilesDisplay() {
-        pinnedTilesContainer.removeAll();
+    /**
+     * Shows quick actions menu for a pinned tile (called from PinnedTilesManager).
+     * Uses mouse position for popup location.
+     */
+    private void showTileQuickActionsForPinnedTile(Tile tile) {
+        JPopupMenu popup = createTileActionsPopup(tile);
 
-        if (pinnedTiles.isEmpty()) {
-            JPanel emptyPanel = new JPanel(new BorderLayout());
-            emptyPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-            emptyPanel.setBorder(new EmptyBorder(20, 10, 20, 10));
-            
-            JLabel emptyLabel = new JLabel("<html><center>📌<br><br>No pinned tiles<br><small>Pin tiles from the board for quick access</small></center></html>");
-            emptyLabel.setForeground(Color.LIGHT_GRAY);
-            emptyLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-            emptyLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            emptyPanel.add(emptyLabel, BorderLayout.CENTER);
-            
-            pinnedTilesContainer.add(emptyPanel);
-            pinnedTilesSection.setVisible(false);
-        } else {
-            // Create compact tile list items for better density
-            for (int i = 0; i < pinnedTiles.size(); i++) {
-                Tile tile = pinnedTiles.get(i);
-                JPanel compactTile = createCompactTileListItem(tile);
-                compactTile.setAlignmentX(Component.LEFT_ALIGNMENT);
-                pinnedTilesContainer.add(compactTile);
-                
-                // Add smaller vertical spacing between tiles
-                if (i < pinnedTiles.size() - 1) {
-                    pinnedTilesContainer.add(Box.createVerticalStrut(3));
-                }
-            }
-
-            // Add vertical spacing before the "Add More" button
-            pinnedTilesContainer.add(Box.createVerticalStrut(8));
-
-            // Add "Add More" button
-            JPanel addButtonWrapper = createAddMoreButtonPanel();
-            addButtonWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
-            pinnedTilesContainer.add(addButtonWrapper);
-
-            pinnedTilesSection.setVisible(true);
-        }
-
-        revalidate();
-        repaint();
+        // Show at mouse position
+        Point mousePos = MouseInfo.getPointerInfo().getLocation();
+        SwingUtilities.convertPointFromScreen(mousePos, this);
+        popup.show(this, mousePos.x, mousePos.y);
     }
 
-    private JPanel createDetailedTileListItem(Tile tile) {
-        JPanel listItem = new JPanel(new BorderLayout());
-        listItem.setBackground(PINNED_TILE_BG);
-        listItem.setBorder(new CompoundBorder(
-            new LineBorder(getStatusColor(tile), 2, true),
-            new EmptyBorder(10, 12, 10, 12)
-        ));
-        listItem.setMaximumSize(new Dimension(Integer.MAX_VALUE, listItem.getPreferredSize().height));
-
-        // Left side: Header image (if available) or icon placeholder
-        JPanel imagePanel = new JPanel(new BorderLayout());
-        imagePanel.setOpaque(false);
-        imagePanel.setPreferredSize(new Dimension(40, 40));
-
-        if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
-            // Load actual header image (scaled down)
-            JLabel imageLabel = new JLabel();
-            imageLabel.setPreferredSize(new Dimension(40, 40));
-            imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            imageLabel.setBorder(new LineBorder(BORDER_COLOR, 1, true));
-
-            // Load image asynchronously
-            SwingUtilities.invokeLater(() -> {
-                try {
-                    ImageIcon icon = new ImageIcon(new URL(tile.getHeaderImage()));
-                    Image scaledImage = icon.getImage().getScaledInstance(38, 38, Image.SCALE_SMOOTH);
-                    imageLabel.setIcon(new ImageIcon(scaledImage));
-                } catch (Exception e) {
-                    // Fallback to text icon
-                    imageLabel.setText("🎯");
-                    imageLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 18));
-                }
-            });
-
-            imagePanel.add(imageLabel, BorderLayout.CENTER);
-        } else {
-            // Use emoji icon as placeholder with better styling
-            JLabel iconLabel = new JLabel("🎯");
-            iconLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 18));
-            iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            iconLabel.setPreferredSize(new Dimension(40, 40));
-            iconLabel.setBorder(new LineBorder(BORDER_COLOR, 1, true));
-            iconLabel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            iconLabel.setOpaque(true);
-            imagePanel.add(iconLabel, BorderLayout.CENTER);
-        }
-
-        // Center: Tile details
-        JPanel detailsPanel = new JPanel();
-        detailsPanel.setLayout(new BoxLayout(detailsPanel, BoxLayout.Y_AXIS));
-        detailsPanel.setOpaque(false);
-        detailsPanel.setBorder(new EmptyBorder(2, 12, 2, 8));
-
-        // Title
-        JLabel titleLabel = new JLabel(tile.getTitle());
-        titleLabel.setForeground(Color.WHITE);
-        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        detailsPanel.add(titleLabel);
-        
-        // Add small spacing after title
-        detailsPanel.add(Box.createVerticalStrut(2));
-
-        // Description (truncated if too long)
-        if (tile.getDescription() != null && !tile.getDescription().trim().isEmpty()) {
-            String description = tile.getDescription();
-            if (description.length() > 80) {
-                description = description.substring(0, 80) + "...";
-            }
-            JLabel descLabel = new JLabel("<html><div style='width: 140px;'>" + description + "</div></html>");
-            descLabel.setForeground(new Color(180, 185, 190));
-            descLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
-            descLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-            detailsPanel.add(descLabel);
-        }
-
-        // Right side: Status and stats
-        JPanel rightPanel = new JPanel();
-        rightPanel.setLayout(new BoxLayout(rightPanel, BoxLayout.Y_AXIS));
-        rightPanel.setOpaque(false);
-        rightPanel.setAlignmentY(Component.TOP_ALIGNMENT);
-        
-        // XP Badge (always shown, most important info)
-        JPanel xpBadge = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        xpBadge.setOpaque(false);
-        xpBadge.setBorder(new EmptyBorder(0, 0, 2, 0));
-
-        JLabel xpLabel = new JLabel(tile.getWeight() + " XP");
-        xpLabel.setForeground(GOLD_COLOR);
-        xpLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
-        xpBadge.add(xpLabel);
-        rightPanel.add(xpBadge);
-
-        // Status indicator (if submitted)
-        if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null &&
-            tile.getSubmission().getStatus() != TileSubmissionType.NOT_SUBMITTED) {
-            JPanel statusBadge = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-            statusBadge.setOpaque(false);
-            statusBadge.setBorder(new EmptyBorder(2, 0, 2, 0));
-
-            String statusText = getStatusText(tile.getSubmission().getStatus());
-            JLabel statusLabel = new JLabel("● " + statusText);
-            statusLabel.setForeground(getStatusColor(tile));
-            statusLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 9));
-            statusBadge.add(statusLabel);
-            rightPanel.add(statusBadge);
-        }
-
-        // Tier info (if available and greater than 1)
-        if (tile.getTier() != null && tile.getTier() > 1) {
-            JPanel tierBadge = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-            tierBadge.setOpaque(false);
-            tierBadge.setBorder(new EmptyBorder(2, 0, 0, 0));
-
-            JLabel tierLabel = new JLabel("Tier " + tile.getTier());
-            tierLabel.setForeground(new Color(156, 163, 175));
-            tierLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 9));
-            tierBadge.add(tierLabel);
-            rightPanel.add(tierBadge);
-        }
-
-        // Assemble the list item
-        listItem.add(imagePanel, BorderLayout.WEST);
-        listItem.add(detailsPanel, BorderLayout.CENTER);
-        listItem.add(rightPanel, BorderLayout.EAST);
-
-        // Click handlers with improved feedback
-        listItem.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                // Check if shift is pressed for unpinning (like in BingoBoardWindow)
-                boolean shiftPressed = e.isShiftDown();
-                
-                if (shiftPressed) {
-                    // Shift-click to unpin (matches BingoBoardWindow behavior)
-                    removePinnedTile(tile.getId().toString());
-                } else {
-                    // Both left-click and right-click open context menu
-                    showTileQuickActions(tile, listItem);
-                }
-            }
-
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent e) {
-                Color brighterBg = new Color(
-                    Math.min(255, PINNED_TILE_BG.getRed() + 15),
-                    Math.min(255, PINNED_TILE_BG.getGreen() + 15), 
-                    Math.min(255, PINNED_TILE_BG.getBlue() + 15)
-                );
-                listItem.setBackground(brighterBg);
-                listItem.setCursor(new Cursor(Cursor.HAND_CURSOR));
-                
-                // Slightly brighten the border on hover
-                listItem.setBorder(new CompoundBorder(
-                    new LineBorder(getStatusColor(tile).brighter(), 2, true),
-                    new EmptyBorder(10, 12, 10, 12)
-                ));
-            }
-
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent e) {
-                listItem.setBackground(PINNED_TILE_BG);
-                listItem.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
-                
-                // Reset border
-                listItem.setBorder(new CompoundBorder(
-                    new LineBorder(getStatusColor(tile), 2, true),
-                    new EmptyBorder(10, 12, 10, 12)
-                ));
-            }
-        });
-
-        // Enhanced tooltip with comprehensive information
-        StringBuilder tooltipText = new StringBuilder("<html><b>" + tile.getTitle() + "</b><br>");
-        
-        if (tile.getDescription() != null && !tile.getDescription().trim().isEmpty()) {
-            tooltipText.append("<br>").append(tile.getDescription()).append("<br>");
-        }
-        
-        tooltipText.append("<br><b>Details:</b><br>");
-        tooltipText.append("• XP: ").append(tile.getWeight()).append("<br>");
-        
-        if (tile.getTier() != null && tile.getTier() > 1) {
-            tooltipText.append("• Tier: ").append(tile.getTier()).append("<br>");
-        }
-        
-        if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null &&
-            tile.getSubmission().getStatus() != TileSubmissionType.NOT_SUBMITTED) {
-            tooltipText.append("• Status: ").append(getStatusText(tile.getSubmission().getStatus())).append("<br>");
-        }
-        
-        tooltipText.append("<br><i>Click for actions • Shift+Click to unpin</i>");
-        tooltipText.append("</html>");
-        
-        listItem.setToolTipText(tooltipText.toString());
-
-        return listItem;
-    }
-    
-    private JPanel createCompactTileListItem(Tile tile) {
-        JPanel listItem = new JPanel(new BorderLayout());
-        listItem.setBackground(PINNED_TILE_BG);
-        listItem.setBorder(new CompoundBorder(
-            new LineBorder(getStatusColor(tile), 1, true),
-            new EmptyBorder(6, 8, 6, 8)
-        ));
-        listItem.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40)); // Compact height
-        
-        // Left: Icon/Image (smaller)
-        JPanel imagePanel = new JPanel(new BorderLayout());
-        imagePanel.setOpaque(false);
-        imagePanel.setPreferredSize(new Dimension(24, 24));
-        
-        if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
-            JLabel imageLabel = new JLabel();
-            imageLabel.setPreferredSize(new Dimension(24, 24));
-            imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            
-            SwingUtilities.invokeLater(() -> {
-                try {
-                    ImageIcon icon = new ImageIcon(new URL(tile.getHeaderImage()));
-                    Image scaledImage = icon.getImage().getScaledInstance(22, 22, Image.SCALE_SMOOTH);
-                    imageLabel.setIcon(new ImageIcon(scaledImage));
-                } catch (Exception e) {
-                    imageLabel.setText("🎯");
-                    imageLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-                }
-            });
-            imagePanel.add(imageLabel, BorderLayout.CENTER);
-        } else {
-            JLabel iconLabel = new JLabel("🎯");
-            iconLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-            iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            iconLabel.setPreferredSize(new Dimension(24, 24));
-            imagePanel.add(iconLabel, BorderLayout.CENTER);
-        }
-        
-        // Center: Title only (no description for compactness)
-        JPanel titlePanel = new JPanel(new BorderLayout());
-        titlePanel.setOpaque(false);
-        titlePanel.setBorder(new EmptyBorder(0, 8, 0, 8));
-        
-        JLabel titleLabel = new JLabel(tile.getTitle());
-        titleLabel.setForeground(Color.WHITE);
-        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
-        titlePanel.add(titleLabel, BorderLayout.CENTER);
-        
-        // Right: XP and Status
-        JPanel rightPanel = new JPanel();
-        rightPanel.setLayout(new BoxLayout(rightPanel, BoxLayout.X_AXIS));
-        rightPanel.setOpaque(false);
-        
-        // Status indicator (if applicable)
-        if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null &&
-            tile.getSubmission().getStatus() != TileSubmissionType.NOT_SUBMITTED) {
-            JLabel statusDot = new JLabel("●");
-            statusDot.setForeground(getStatusColor(tile));
-            statusDot.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 8));
-            rightPanel.add(statusDot);
-            rightPanel.add(Box.createHorizontalStrut(4));
-        }
-        
-        // XP value
-        JLabel xpLabel = new JLabel(tile.getWeight() + "XP");
-        xpLabel.setForeground(GOLD_COLOR);
-        xpLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 9));
-        rightPanel.add(xpLabel);
-        
-        // Tier (if applicable)
-        if (tile.getTier() != null && tile.getTier() > 1) {
-            rightPanel.add(Box.createHorizontalStrut(4));
-            JLabel tierLabel = new JLabel("T" + tile.getTier());
-            tierLabel.setForeground(new Color(156, 163, 175));
-            tierLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 8));
-            rightPanel.add(tierLabel);
-        }
-        
-        // Assemble the compact list item
-        listItem.add(imagePanel, BorderLayout.WEST);
-        listItem.add(titlePanel, BorderLayout.CENTER);
-        listItem.add(rightPanel, BorderLayout.EAST);
-        
-        // Click handlers (same as detailed version)
-        listItem.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                boolean shiftPressed = e.isShiftDown();
-                
-                if (shiftPressed) {
-                    removePinnedTile(tile.getId().toString());
-                } else {
-                    showTileQuickActions(tile, listItem);
-                }
-            }
-            
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent e) {
-                Color brighterBg = new Color(
-                    Math.min(255, PINNED_TILE_BG.getRed() + 10),
-                    Math.min(255, PINNED_TILE_BG.getGreen() + 10), 
-                    Math.min(255, PINNED_TILE_BG.getBlue() + 10)
-                );
-                listItem.setBackground(brighterBg);
-                listItem.setCursor(new Cursor(Cursor.HAND_CURSOR));
-                
-                listItem.setBorder(new CompoundBorder(
-                    new LineBorder(getStatusColor(tile).brighter(), 1, true),
-                    new EmptyBorder(6, 8, 6, 8)
-                ));
-            }
-            
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent e) {
-                listItem.setBackground(PINNED_TILE_BG);
-                listItem.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
-                
-                listItem.setBorder(new CompoundBorder(
-                    new LineBorder(getStatusColor(tile), 1, true),
-                    new EmptyBorder(6, 8, 6, 8)
-                ));
-            }
-        });
-        
-        // Compact tooltip
-        StringBuilder tooltipText = new StringBuilder("<html><b>" + tile.getTitle() + "</b><br>");
-        tooltipText.append("XP: ").append(tile.getWeight());
-        
-        if (tile.getTier() != null && tile.getTier() > 1) {
-            tooltipText.append(" • Tier ").append(tile.getTier());
-        }
-        
-        if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null &&
-            tile.getSubmission().getStatus() != TileSubmissionType.NOT_SUBMITTED) {
-            tooltipText.append("<br>Status: ").append(getStatusText(tile.getSubmission().getStatus()));
-        }
-        
-        tooltipText.append("<br><i>Click for actions • Shift+Click to unpin</i>");
-        tooltipText.append("</html>");
-        
-        listItem.setToolTipText(tooltipText.toString());
-        
-        return listItem;
-    }
-
-    private String getStatusText(TileSubmissionType status) {
-        switch (status) {
-            case PENDING: return "Pending";
-            case ACCEPTED: return "Completed";
-            case REQUIRES_INTERACTION: return "Action Needed";
-            case DECLINED: return "Declined";
-            default: return "Not Submitted";
-        }
-    }
-
-    private Color getStatusColor(Tile tile) {
-        if (tile.getSubmission() == null || tile.getSubmission().getStatus() == null) {
-            return BORDER_COLOR;
-        }
-
-        switch (tile.getSubmission().getStatus()) {
-            case PENDING: return ACCENT_BLUE;
-            case ACCEPTED: return SUCCESS_COLOR;
-            case REQUIRES_INTERACTION: return WARNING_YELLOW;
-            case DECLINED: return ERROR_RED;
-            default: return BORDER_COLOR;
-        }
-    }
-
+    /**
+     * Shows quick actions menu for a tile with specific component positioning.
+     */
     private void showTileQuickActions(Tile tile, JPanel miniTile) {
+        JPopupMenu popup = createTileActionsPopup(tile);
+
+        if (miniTile != null) {
+            popup.show(miniTile, miniTile.getWidth() / 2, miniTile.getHeight() / 2);
+        }
+    }
+
+    /**
+     * Creates the popup menu with actions for a tile.
+     */
+    private JPopupMenu createTileActionsPopup(Tile tile) {
         JPopupMenu popup = new JPopupMenu();
 
         // Only show screenshot option if tile is not already accepted
-        boolean isAccepted = tile.getSubmission() != null && 
+        boolean isAccepted = tile.getSubmission() != null &&
                            tile.getSubmission().getStatus() == TileSubmissionType.ACCEPTED;
-                           
+
         if (!isAccepted) {
             JMenuItem screenshotItem = new JMenuItem("📷 Quick Screenshot");
             screenshotItem.addActionListener(e -> {
-                // Take a screenshot for this specific tile
                 plugin.takeScreenshot(tile.getId(), (screenshotBytes) -> {
                     if (screenshotBytes != null) {
                         SwingUtilities.invokeLater(() -> {
@@ -1511,145 +1013,8 @@ public class BingoScapePanel extends PluginPanel {
         unpinItem.addActionListener(e -> removePinnedTile(tile.getId().toString()));
         popup.add(unpinItem);
 
-        popup.show(miniTile, miniTile.getWidth() / 2, miniTile.getHeight() / 2);
+        return popup;
     }
-
-    private JPanel createMiniTile(Tile tile) {
-        JPanel miniTile = new JPanel(new BorderLayout());
-        miniTile.setPreferredSize(new Dimension(MINI_TILE_SIZE, PINNED_TILE_HEIGHT));
-        miniTile.setMaximumSize(new Dimension(MINI_TILE_SIZE, PINNED_TILE_HEIGHT));
-        miniTile.setMinimumSize(new Dimension(MINI_TILE_SIZE, PINNED_TILE_HEIGHT));
-        miniTile.setBackground(PINNED_TILE_BG);
-        miniTile.setBorder(new CompoundBorder(
-            new LineBorder(getStatusColor(tile), 2, true),
-            new EmptyBorder(3, 3, 3, 3)
-        ));
-
-        // Top: Image or icon
-        JPanel imagePanel = new JPanel(new BorderLayout());
-        imagePanel.setOpaque(false);
-        imagePanel.setPreferredSize(new Dimension(MINI_TILE_SIZE - 6, 26));
-
-        if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
-            JLabel imageLabel = new JLabel();
-            imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
-
-            // Load image asynchronously and scale it down
-            SwingUtilities.invokeLater(() -> {
-                try {
-                    ImageIcon icon = new ImageIcon(new URL(tile.getHeaderImage()));
-                    Image scaledImage = icon.getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH);
-                    imageLabel.setIcon(new ImageIcon(scaledImage));
-                } catch (Exception e) {
-                    imageLabel.setText("🎯");
-                    imageLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 16));
-                }
-            });
-            imagePanel.add(imageLabel, BorderLayout.CENTER);
-        } else {
-            JLabel iconLabel = new JLabel("🎯");
-            iconLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 16));
-            iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            imagePanel.add(iconLabel, BorderLayout.CENTER);
-        }
-
-        // Bottom: XP value
-        JLabel xpLabel = new JLabel(tile.getWeight() + "XP");
-        xpLabel.setForeground(GOLD_COLOR);
-        xpLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 9));
-        xpLabel.setHorizontalAlignment(SwingConstants.CENTER);
-
-        miniTile.add(imagePanel, BorderLayout.CENTER);
-        miniTile.add(xpLabel, BorderLayout.SOUTH);
-
-        // Interaction
-        miniTile.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        miniTile.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                // Check if shift is pressed for unpinning (like in BingoBoardWindow)
-                boolean shiftPressed = e.isShiftDown();
-                
-                if (shiftPressed) {
-                    // Shift-click to unpin
-                    removePinnedTile(tile.getId().toString());
-                } else {
-                    // Both left-click and right-click open context menu
-                    showTileQuickActions(tile, miniTile);
-                }
-            }
-
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent e) {
-                miniTile.setBackground(PINNED_TILE_BG.brighter());
-            }
-
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent e) {
-                miniTile.setBackground(PINNED_TILE_BG);
-            }
-        });
-
-        // Tooltip
-        miniTile.setToolTipText("<html><b>" + tile.getTitle() + "</b><br>" +
-                               tile.getWeight() + " XP<br>" +
-                               "<i>Click for actions • Shift+Click to unpin</i></html>");
-
-        return miniTile;
-    }
-
-    private JPanel createAddMoreButtonPanel() {
-        JPanel buttonPanel = new JPanel(new BorderLayout());
-        buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        buttonPanel.setBorder(new CompoundBorder(
-            new LineBorder(BORDER_COLOR, 1, true),
-            new EmptyBorder(8, 12, 8, 12)
-        ));
-        
-        JButton addButton = new JButton("📌 Pin More Tiles");
-        addButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        addButton.setFocusPainted(false);
-        addButton.setContentAreaFilled(false);
-        addButton.setBorder(new EmptyBorder(6, 0, 6, 0));
-        addButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        addButton.setForeground(Color.LIGHT_GRAY);
-        addButton.setHorizontalAlignment(SwingConstants.CENTER);
-        addButton.setToolTipText("Open the bingo board to pin more tiles");
-
-        addButton.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                addButton.setContentAreaFilled(true);
-                addButton.setBackground(ACCENT_BLUE);
-                addButton.setForeground(Color.WHITE);
-                buttonPanel.setBorder(new CompoundBorder(
-                    new LineBorder(ACCENT_BLUE, 1, true),
-                    new EmptyBorder(8, 12, 8, 12)
-                ));
-            }
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                addButton.setContentAreaFilled(false);
-                addButton.setForeground(Color.LIGHT_GRAY);
-                buttonPanel.setBorder(new CompoundBorder(
-                    new LineBorder(BORDER_COLOR, 1, true),
-                    new EmptyBorder(8, 12, 8, 12)
-                ));
-            }
-        });
-
-        addButton.addActionListener(e -> {
-            // Show the bingo board to pin more tiles
-            Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
-            if (selectedBingo != null) {
-                showBingoBoardWindow(selectedBingo);
-            }
-        });
-        
-        buttonPanel.add(addButton, BorderLayout.CENTER);
-        return buttonPanel;
-    }
-
 
     public void cleanup() {
         if (executor != null && !executor.isShutdown()) {
@@ -1804,8 +1169,8 @@ public class BingoScapePanel extends PluginPanel {
 
         if (eventData.getStartDate() != null && eventData.getEndDate() != null) {
             addCompactInfoRow(content, "📅",
-                DATE_FORMAT.format(eventData.getStartDate()) + " - " +
-                DATE_FORMAT.format(eventData.getEndDate()));
+                UIConstants.DATE_FORMAT.format(eventData.getStartDate()) + " - " +
+                UIConstants.DATE_FORMAT.format(eventData.getEndDate()));
         }
 
         if (eventData.getBasePrizePool() > 0) {
