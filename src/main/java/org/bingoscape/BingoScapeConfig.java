@@ -32,7 +32,7 @@ public interface BingoScapeConfig extends Config
     )
     default String apiBaseUrl()
     {
-        return "https://next.bingoscape.org";
+        return "https://bingoscape.org";
     }
 
     @ConfigItem(
