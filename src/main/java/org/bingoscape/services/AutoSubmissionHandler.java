@@ -8,6 +8,7 @@ import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.http.api.loottracker.LootRecordType;
 import org.bingoscape.BingoScapeConfig;
 import org.bingoscape.BingoScapePlugin;
+import org.bingoscape.models.AutoSubmissionMetadata;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -69,6 +70,19 @@ public class AutoSubmissionHandler {
     }
 
     /**
+     * Gets the current logged-in RuneScape account name.
+     * Uses the plugin's client to get the local player name.
+     */
+    private String getAccountName() {
+        try {
+            return plugin.getAccountName();
+        } catch (Exception e) {
+            log.warn("Failed to get account name", e);
+            return null;
+        }
+    }
+
+    /**
      * Processes a collection of item drops to check if any match tile requirements.
      */
     private void processItemDrops(Collection<ItemStack> items, Integer npcId, String sourceName, String sourceType) {
@@ -95,23 +109,39 @@ public class AutoSubmissionHandler {
                         continue;
                     }
 
-                    // Submit this tile
-                    submitTileAutomatic(tileId, itemId, sourceName);
+                    // Submit this tile with full metadata
+                    submitTileAutomaticWithMetadata(tileId, itemId, sourceName, npcId, sourceType);
                 }
             }
         }
     }
 
     /**
-     * Automatically submits a tile with a screenshot.
+     * Automatically submits a tile with a screenshot and metadata.
      */
     private void submitTileAutomatic(UUID tileId, int itemId, String sourceName) {
+        submitTileAutomaticWithMetadata(tileId, itemId, sourceName, null, "Unknown");
+    }
+
+    /**
+     * Automatically submits a tile with a screenshot and full metadata.
+     */
+    private void submitTileAutomaticWithMetadata(UUID tileId, int itemId, String sourceName, Integer npcId, String sourceType) {
         log.info("Auto-submitting tile {} for item {} from {}", tileId, itemId, sourceName);
 
         // Mark this tile as recently submitted
         recentSubmissions.put(tileId, System.currentTimeMillis());
 
-        // Take screenshot and submit
+        // Build metadata
+        AutoSubmissionMetadata metadata = AutoSubmissionMetadata.builder()
+                .itemId(itemId)
+                .sourceName(sourceName)
+                .npcId(npcId)
+                .sourceType(sourceType)
+                .accountName(getAccountName())
+                .build();
+
+        // Take screenshot and submit with metadata
         plugin.takeScreenshot(tileId, screenshotBytes -> {
             if (screenshotBytes == null) {
                 log.error("Failed to capture screenshot for tile {}", tileId);
@@ -119,8 +149,8 @@ public class AutoSubmissionHandler {
                 return;
             }
 
-            // Submit to API
-            plugin.submitTileCompletionWithScreenshot(tileId, screenshotBytes);
+            // Submit to API with metadata
+            plugin.submitTileAutomaticWithMetadata(tileId, screenshotBytes, metadata);
 
             // Show notification if enabled
             if (config.showAutoSubmitNotifications()) {

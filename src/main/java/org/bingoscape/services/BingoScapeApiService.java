@@ -18,6 +18,7 @@ import java.util.function.Consumer;
 @Singleton
 public class BingoScapeApiService {
     private static final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/png");
+    private static final MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json");
 
     private final OkHttpClient httpClient;
     private final Gson gson;
@@ -105,6 +106,62 @@ public class BingoScapeApiService {
                     }
 
                     Bingo updatedBingo = gson.fromJson(stringBody, Bingo.class);
+                    onSuccess.accept(updatedBingo);
+                }
+            }
+        });
+    }
+
+    /**
+     * Submits a tile completion automatically with metadata about the source.
+     * This uses a dedicated auto-submission endpoint that can automatically assign goals
+     * and approve submissions based on the provided metadata.
+     */
+    public void submitTileAutomatic(UUID tileId, byte[] screenshotBytes, AutoSubmissionMetadata metadata,
+                                     Consumer<Bingo> onSuccess, Consumer<String> onError) {
+        if (!hasApiKey()) {
+            onError.accept("No API key configured");
+            return;
+        }
+
+        String apiUrl = config.apiBaseUrl() + "/api/runelite/tiles/" + tileId + "/auto-submissions";
+
+        // Convert metadata to JSON
+        String metadataJson = gson.toJson(metadata);
+
+        RequestBody requestBody = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("image", "screenshot.png", RequestBody.create(MEDIA_TYPE_PNG, screenshotBytes))
+                .addFormDataPart("metadata", metadataJson)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(apiUrl)
+                .header("Authorization", "Bearer " + config.apiKey())
+                .post(requestBody)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                log.error("Failed to submit automatic tile completion", e);
+                onError.accept("Failed to submit automatic tile completion: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    String stringBody = responseBody.string();
+                    if (!response.isSuccessful()) {
+                        ErrorResponse errorResponse = gson.fromJson(stringBody, ErrorResponse.class);
+                        String error = errorResponse.getError();
+                        log.error("Unsuccessful auto-submission response: {}", error);
+                        onError.accept(error);
+                        return;
+                    }
+
+                    Bingo updatedBingo = gson.fromJson(stringBody, Bingo.class);
+                    log.info("Auto-submission successful for tile {}", tileId);
                     onSuccess.accept(updatedBingo);
                 }
             }
