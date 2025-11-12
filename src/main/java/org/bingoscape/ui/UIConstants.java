@@ -27,6 +27,18 @@ public final class UIConstants {
     public static final int FADE_TIMER_DELAY = 50;
     public static final int MAX_ALPHA = 255;
 
+    // Dialog and Window Sizes
+    public static final int SCREENSHOT_DIALOG_WIDTH = 600;
+    public static final int SCREENSHOT_DIALOG_HEIGHT = 500;
+    public static final int SCREENSHOT_DIALOG_HEIGHT_WITH_TILE = 550;
+    public static final int SCREENSHOT_SCROLL_WIDTH = 580;
+    public static final int SCREENSHOT_SCROLL_HEIGHT = 400;
+
+    // Dialog Padding and Borders
+    public static final int DIALOG_PADDING = 10;
+    public static final int DIALOG_BORDER_SIZE = 1;
+    public static final int PANEL_BORDER_SIZE = 2;
+
     // Text Constants
     public static final String NO_EVENTS_TEXT = "No active events found";
 

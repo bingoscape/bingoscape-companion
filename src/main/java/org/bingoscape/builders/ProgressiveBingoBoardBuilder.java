@@ -3,11 +3,13 @@ package org.bingoscape.builders;
 import net.runelite.client.ui.ColorScheme;
 import org.bingoscape.BingoScapePlugin;
 import org.bingoscape.models.*;
+import org.bingoscape.ui.ColorPalette;
+import org.bingoscape.ui.StatusConstants;
+import org.bingoscape.ui.UIStyleFactory;
+import org.bingoscape.constants.BingoTypeConstants;
 
 import javax.swing.*;
-import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -56,28 +58,7 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
     private static final int MEDIUM_FONT_SIZE = 12;
     private static final int IMAGE_MARGIN = 10;
     private static final int IMAGE_TITLE_OFFSET = 20;
-    
-    // Color Constants
-    private static final Color GOLD_COLOR = new Color(255, 215, 0);
-    
-    // Status Background Colors
-    private static final Color PENDING_BG_COLOR = new Color(30, 64, 122);
-    private static final Color ACCEPTED_BG_COLOR = new Color(17, 99, 47);
-    private static final Color REQUIRES_ACTION_BG_COLOR = new Color(117, 89, 4);
-    private static final Color DECLINED_BG_COLOR = new Color(120, 34, 34);
-    
-    // Status Border Colors
-    private static final Color PENDING_BORDER_COLOR = new Color(59, 130, 246);
-    private static final Color ACCEPTED_BORDER_COLOR = new Color(34, 197, 94);
-    private static final Color REQUIRES_ACTION_BORDER_COLOR = new Color(234, 179, 8);
-    private static final Color DECLINED_BORDER_COLOR = new Color(239, 68, 68);
-    
-    // Status Text Colors
-    private static final Color PENDING_TEXT_COLOR = new Color(59, 130, 246);
-    private static final Color ACCEPTED_TEXT_COLOR = new Color(34, 197, 94);
-    private static final Color REQUIRES_ACTION_TEXT_COLOR = new Color(234, 179, 8);
-    private static final Color DECLINED_TEXT_COLOR = new Color(239, 68, 68);
-    
+
     /**
      * Configuration class for progressive board customization.
      */
@@ -221,7 +202,9 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         JPanel tierSection = new JPanel();
         tierSection.setLayout(new BoxLayout(tierSection, BoxLayout.Y_AXIS));
         tierSection.setOpaque(false);
-        tierSection.setBorder(new EmptyBorder(LARGE_SPACING, TIER_SECTION_PADDING, LARGE_SPACING, TIER_SECTION_PADDING));
+        tierSection.setBorder(UIStyleFactory.createPaddingBorder(
+            LARGE_SPACING, TIER_SECTION_PADDING, LARGE_SPACING, TIER_SECTION_PADDING
+        ));
         
         // Check if tier is collapsed
         boolean isCollapsed = configuration.enableTierCollapse && collapsedTiers.contains(tierNum);
@@ -278,12 +261,14 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
     private JPanel createCollapsedPlaceholder() {
         JPanel placeholderPanel = new JPanel(new BorderLayout());
         placeholderPanel.setOpaque(false);
-        placeholderPanel.setBorder(new EmptyBorder(LARGE_SPACING, TILES_PANEL_SIDE_MARGIN, LARGE_SPACING, TILES_PANEL_SIDE_MARGIN));
+        placeholderPanel.setBorder(UIStyleFactory.createPaddingBorder(
+            LARGE_SPACING, TILES_PANEL_SIDE_MARGIN, LARGE_SPACING, TILES_PANEL_SIDE_MARGIN
+        ));
         
         // Create a horizontal line that spans the width
         JPanel linePanel = new JPanel();
         linePanel.setOpaque(true);
-        linePanel.setBackground(new Color(75, 85, 99)); // Gray color matching UI theme
+        linePanel.setBackground(ColorPalette.BORDER);
         linePanel.setPreferredSize(new Dimension(0, 2)); // Thin horizontal line
         linePanel.setMinimumSize(new Dimension(0, 2));
         linePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 2));
@@ -307,9 +292,9 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         header.setOpaque(true);
         
         // Enhanced background with hierarchy visual cues
-        Color backgroundColor = new Color(45, 55, 72);
+        Color backgroundColor = ColorPalette.PINNED_TILE_BG;
         if (tierNum == 1) {
-            backgroundColor = new Color(55, 65, 81); // Slightly lighter for tier 1
+            backgroundColor = ColorPalette.CARD_BG;
         } else if (tierNum > 1) {
             // Darker for higher tiers to show hierarchy
             int darkness = Math.max(30, 50 - (tierNum - 1) * 5);
@@ -322,14 +307,14 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         header.setMaximumSize(new Dimension(Integer.MAX_VALUE, TIER_HEADER_HEIGHT));
         
         // Enhanced border with hierarchy indentation effect
-        Color borderColor = isUnlocked ? new Color(34, 197, 94) : new Color(107, 114, 128);
+        Color borderColor = isUnlocked ? ColorPalette.SUCCESS : ColorPalette.TEXT_MEDIUM_GRAY;
         int borderWidth = isUnlocked ? 2 : 1;
         
         // Add hierarchical indentation
         int leftIndent = TIER_HEADER_PADDING + (tierNum - 1) * 8; // 8px indent per tier
-        header.setBorder(new CompoundBorder(
-            new LineBorder(borderColor, borderWidth, true),
-            new EmptyBorder(TIER_HEADER_PADDING, leftIndent, TIER_HEADER_PADDING, TIER_HEADER_PADDING)
+        header.setBorder(UIStyleFactory.createStyledBorder(
+            borderColor, borderWidth, TIER_HEADER_PADDING, leftIndent,
+            TIER_HEADER_PADDING, TIER_HEADER_PADDING
         ));
         
         // Left side: Enhanced tier info with hierarchy indicators
@@ -351,7 +336,7 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         if (tierNum > 1) {
             // Add hierarchy connector symbols
             JLabel connector = new JLabel("├─ ");
-            connector.setForeground(new Color(107, 114, 128));
+            connector.setForeground(ColorPalette.TEXT_MEDIUM_GRAY);
             connector.setFont(new Font("Monospaced", Font.PLAIN, 12));
             tierInfoPanel.add(connector);
         }
@@ -368,7 +353,7 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
             String progressText = getProgressText(tierNum, bingo != null ? bingo.getProgression() : null);
             if (!progressText.isEmpty()) {
                 JLabel progressLabel = new JLabel(" - " + progressText);
-                progressLabel.setForeground(new Color(156, 163, 175));
+                progressLabel.setForeground(ColorPalette.TEXT_SECONDARY_GRAY);
                 progressLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
                 tierInfoPanel.add(progressLabel);
             }
@@ -385,31 +370,32 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         // Enhanced color scheme based on tier and status
         Color backgroundColor;
         if (!isUnlocked) {
-            backgroundColor = new Color(75, 85, 99); // Gray for locked
+            backgroundColor = ColorPalette.BORDER;
         } else if (tierNum == 1) {
-            backgroundColor = new Color(34, 197, 94); // Green for tier 1
+            backgroundColor = ColorPalette.SUCCESS;
         } else if (tierNum == 2) {
-            backgroundColor = new Color(59, 130, 246); // Blue for tier 2
+            backgroundColor = ColorPalette.ACCENT_BLUE;
         } else if (tierNum == 3) {
-            backgroundColor = new Color(168, 85, 247); // Purple for tier 3
+            backgroundColor = ColorPalette.TIER_3_PURPLE;
         } else {
-            // Gold/orange for higher tiers
-            backgroundColor = new Color(245, 158, 11);
+            backgroundColor = ColorPalette.TIER_4_ORANGE;
         }
         
         tierIcon.setBackground(backgroundColor);
         tierIcon.setForeground(Color.WHITE);
         tierIcon.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        tierIcon.setBorder(new EmptyBorder(MEDIUM_SPACING, TIER_ICON_PADDING, MEDIUM_SPACING, TIER_ICON_PADDING));
-        tierIcon.setHorizontalAlignment(SwingConstants.CENTER);
-        
         // Add subtle shadow effect for unlocked tiers
         if (isUnlocked) {
-            tierIcon.setBorder(new CompoundBorder(
-                new LineBorder(backgroundColor.darker(), 1, true),
-                new EmptyBorder(MEDIUM_SPACING, TIER_ICON_PADDING, MEDIUM_SPACING, TIER_ICON_PADDING)
+            tierIcon.setBorder(UIStyleFactory.createStyledBorder(
+                UIStyleFactory.darken(backgroundColor, 20), 1,
+                MEDIUM_SPACING, TIER_ICON_PADDING, MEDIUM_SPACING, TIER_ICON_PADDING
+            ));
+        } else {
+            tierIcon.setBorder(UIStyleFactory.createPaddingBorder(
+                MEDIUM_SPACING, TIER_ICON_PADDING, MEDIUM_SPACING, TIER_ICON_PADDING
             ));
         }
+        tierIcon.setHorizontalAlignment(SwingConstants.CENTER);
         
         return tierIcon;
     }
@@ -417,10 +403,12 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
     private JLabel createTierIcon(Integer tierNum) {
         JLabel tierIcon = new JLabel(String.valueOf(tierNum));
         tierIcon.setOpaque(true);
-        tierIcon.setBackground(new Color(59, 130, 246));
+        tierIcon.setBackground(ColorPalette.ACCENT_BLUE);
         tierIcon.setForeground(Color.WHITE);
         tierIcon.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        tierIcon.setBorder(new EmptyBorder(MEDIUM_SPACING, TIER_ICON_PADDING, MEDIUM_SPACING, TIER_ICON_PADDING));
+        tierIcon.setBorder(UIStyleFactory.createPaddingBorder(
+            MEDIUM_SPACING, TIER_ICON_PADDING, MEDIUM_SPACING, TIER_ICON_PADDING
+        ));
         tierIcon.setHorizontalAlignment(SwingConstants.CENTER);
         return tierIcon;
     }
@@ -429,7 +417,7 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         JLabel tierLabel = new JLabel("Tier " + tierNum);
         tierLabel.setForeground(Color.WHITE);
         tierLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
-        tierLabel.setBorder(new EmptyBorder(0, TIER_LABEL_LEFT_MARGIN, 0, 0));
+        tierLabel.setBorder(UIStyleFactory.createPaddingBorder(0, TIER_LABEL_LEFT_MARGIN, 0, 0));
         return tierLabel;
     }
     
@@ -458,8 +446,8 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         collapseIndicator.setForeground(Color.WHITE);
         collapseIndicator.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14)); // Slightly larger and bold
         collapseIndicator.setOpaque(true);
-        collapseIndicator.setBackground(new Color(75, 85, 99));
-        collapseIndicator.setBorder(new EmptyBorder(4, 8, 4, 8));
+        collapseIndicator.setBackground(ColorPalette.BORDER);
+        collapseIndicator.setBorder(UIStyleFactory.createPaddingBorder(4, 8, 4, 8));
         collapseIndicator.setHorizontalAlignment(SwingConstants.CENTER);
         collapseIndicator.setToolTipText(isCollapsed ? "Click to expand tier" : "Click to collapse tier");
         return collapseIndicator;
@@ -468,57 +456,48 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
     private JLabel createStatusLabel(boolean isUnlocked) {
         JLabel statusLabel = new JLabel(isUnlocked ? "Unlocked" : "Locked");
         statusLabel.setOpaque(true);
-        statusLabel.setBackground(isUnlocked ? new Color(34, 197, 94) : new Color(107, 114, 128));
+        statusLabel.setBackground(isUnlocked ? ColorPalette.SUCCESS : ColorPalette.TEXT_MEDIUM_GRAY);
         statusLabel.setForeground(Color.WHITE);
         statusLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-        statusLabel.setBorder(new EmptyBorder(SMALL_SPACING, STATUS_BADGE_PADDING, SMALL_SPACING, STATUS_BADGE_PADDING));
+        statusLabel.setBorder(UIStyleFactory.createPaddingBorder(
+            SMALL_SPACING, STATUS_BADGE_PADDING, SMALL_SPACING, STATUS_BADGE_PADDING
+        ));
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
         return statusLabel;
     }
     
     private void addTierHeaderClickHandler(JPanel tierHeader, Integer tierNum, JPanel tierSection, JPanel contentPanel) {
         tierHeader.addMouseListener(new java.awt.event.MouseAdapter() {
-            private Color originalBackground = tierHeader.getBackground();
-            
+            private final Color originalBackground = tierHeader.getBackground();
+            private final Color highlightColor = UIStyleFactory.brighten(originalBackground, 10);
+            private final Color pressedColor = UIStyleFactory.darken(originalBackground, 20);
+
             @Override
             public void mouseClicked(java.awt.event.MouseEvent e) {
                 toggleTierCollapse(tierNum, tierSection, contentPanel);
             }
-            
+
             @Override
             public void mouseEntered(java.awt.event.MouseEvent e) {
                 tierHeader.setCursor(new Cursor(Cursor.HAND_CURSOR));
-                // Subtle highlight on hover
-                Color highlightColor = new Color(
-                    Math.min(255, originalBackground.getRed() + 10),
-                    Math.min(255, originalBackground.getGreen() + 10),
-                    Math.min(255, originalBackground.getBlue() + 10)
-                );
                 tierHeader.setBackground(highlightColor);
             }
-            
+
             @Override
             public void mouseExited(java.awt.event.MouseEvent e) {
                 tierHeader.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
                 tierHeader.setBackground(originalBackground);
             }
-            
+
             @Override
             public void mousePressed(java.awt.event.MouseEvent e) {
-                // Visual feedback on click
-                Color pressedColor = originalBackground.darker();
                 tierHeader.setBackground(pressedColor);
             }
-            
+
             @Override
             public void mouseReleased(java.awt.event.MouseEvent e) {
                 // Return to hover color if still hovering, otherwise original
                 if (tierHeader.contains(e.getPoint())) {
-                    Color highlightColor = new Color(
-                        Math.min(255, originalBackground.getRed() + 10),
-                        Math.min(255, originalBackground.getGreen() + 10),
-                        Math.min(255, originalBackground.getBlue() + 10)
-                    );
                     tierHeader.setBackground(highlightColor);
                 } else {
                     tierHeader.setBackground(originalBackground);
@@ -605,7 +584,7 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
             tilesPanel.setLayout(new BorderLayout());
             tilesPanel.setOpaque(false);
             JLabel noTilesLabel = new JLabel("No tiles available");
-            noTilesLabel.setForeground(new Color(156, 163, 175));
+            noTilesLabel.setForeground(ColorPalette.TEXT_SECONDARY_GRAY);
             noTilesLabel.setHorizontalAlignment(SwingConstants.CENTER);
             tilesPanel.add(noTilesLabel, BorderLayout.CENTER);
             return tilesPanel;
@@ -617,7 +596,7 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         
         tilesPanel.setLayout(new GridLayout(rows, tilesPerRow, LARGE_SPACING, LARGE_SPACING));
         tilesPanel.setOpaque(false);
-        tilesPanel.setBorder(new EmptyBorder(0, TILES_PANEL_SIDE_MARGIN, 0, TILES_PANEL_SIDE_MARGIN));
+        tilesPanel.setBorder(UIStyleFactory.createPaddingBorder(0, TILES_PANEL_SIDE_MARGIN, 0, TILES_PANEL_SIDE_MARGIN));
         
         // Sort tiles by index
         tierTiles.sort((a, b) -> Integer.compare(a.getIndex(), b.getIndex()));
@@ -642,7 +621,7 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         JPanel lockedPanel = new JPanel();
         lockedPanel.setLayout(new BoxLayout(lockedPanel, BoxLayout.Y_AXIS));
         lockedPanel.setOpaque(false);
-        lockedPanel.setBorder(new EmptyBorder(LOCKED_PANEL_PADDING, LOCKED_PANEL_PADDING, LOCKED_PANEL_PADDING, LOCKED_PANEL_PADDING));
+        lockedPanel.setBorder(UIStyleFactory.createPaddingBorder(LOCKED_PANEL_PADDING));
         
         // Lock icon (using text for simplicity)
         JLabel lockIcon = new JLabel("🔒");
@@ -653,7 +632,7 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         // Dynamic message based on tier
         String previousTier = tierNum > 1 ? "Tier " + (tierNum - 1) : "previous tiers";
         JLabel lockMessage = new JLabel("Complete more tiles in " + previousTier + " to unlock these tiles");
-        lockMessage.setForeground(new Color(156, 163, 175));
+        lockMessage.setForeground(ColorPalette.TEXT_SECONDARY_GRAY);
         lockMessage.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
         lockMessage.setHorizontalAlignment(SwingConstants.CENTER);
         lockMessage.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -715,27 +694,7 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
     }
     
     
-    
-    private String getStatusText(TileSubmissionType status) {
-        switch (status) {
-            case PENDING: return "Pending Review";
-            case ACCEPTED: return "Completed";
-            case REQUIRES_INTERACTION: return "Needs Action";
-            case DECLINED: return "Declined";
-            default: return "Not Submitted";
-        }
-    }
-    
-    private String getStatusHexColor(TileSubmissionType status) {
-        switch (status) {
-            case PENDING: return "#3b82f6";
-            case ACCEPTED: return "#22c55e";
-            case REQUIRES_INTERACTION: return "#eab308";
-            case DECLINED: return "#ef4444";
-            default: return "#ffffff";
-        }
-    }
-    
+
     @Override
     protected ProgressiveBoardConfiguration getBoardConfiguration() {
         return configuration;

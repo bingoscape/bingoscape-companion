@@ -7,6 +7,7 @@ import net.runelite.client.ui.overlay.OverlayPriority;
 import net.runelite.client.ui.overlay.components.LineComponent;
 import net.runelite.client.ui.overlay.components.TitleComponent;
 import org.bingoscape.models.Bingo;
+import org.bingoscape.ui.ColorPalette;
 
 import javax.inject.Inject;
 import javax.swing.*;
@@ -69,7 +70,7 @@ public class BingoCodephraseOverlay extends OverlayPanel {
         // Add title
         panelComponent.getChildren().add(TitleComponent.builder()
                 .text(title)
-                .color(new Color(255, 215, 0)) // Gold color
+                .color(ColorPalette.GOLD)
                 .build());
 
         // Add board

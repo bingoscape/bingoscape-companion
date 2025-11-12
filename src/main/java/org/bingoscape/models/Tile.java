@@ -25,4 +25,5 @@ public class Tile {
     private Date updatedAt;
     private TileSubmission submission;
     private List<Goal> goals;
+    private List<GoalTreeNode> goalTree; // Hierarchical goal structure with AND/OR logic
 }

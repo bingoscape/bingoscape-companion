@@ -8,6 +8,8 @@ import org.bingoscape.models.Tile;
 import org.bingoscape.models.TileSubmission;
 import org.bingoscape.models.TileSubmissionType;
 import org.bingoscape.models.Goal;
+import org.bingoscape.ui.ColorPalette;
+import org.bingoscape.constants.BingoTypeConstants;
 
 import javax.swing.*;
 import javax.swing.border.CompoundBorder;
@@ -46,27 +48,6 @@ public class StandardBingoBoardBuilder extends BingoBoardBuilder {
     private static final int IMAGE_MARGIN = 10;
     private static final int IMAGE_TITLE_OFFSET = 20;
     private static final int SMALL_SPACING = 4;
-
-    // Color Constants
-    private static final Color GOLD_COLOR = new Color(255, 215, 0);
-
-    // Status Background Colors
-    private static final Color PENDING_BG_COLOR = new Color(30, 64, 122);
-    private static final Color ACCEPTED_BG_COLOR = new Color(17, 99, 47);
-    private static final Color REQUIRES_ACTION_BG_COLOR = new Color(117, 89, 4);
-    private static final Color DECLINED_BG_COLOR = new Color(120, 34, 34);
-
-    // Status Border Colors
-    private static final Color PENDING_BORDER_COLOR = new Color(59, 130, 246);
-    private static final Color ACCEPTED_BORDER_COLOR = new Color(34, 197, 94);
-    private static final Color REQUIRES_ACTION_BORDER_COLOR = new Color(234, 179, 8);
-    private static final Color DECLINED_BORDER_COLOR = new Color(239, 68, 68);
-
-    // Status Text Colors
-    private static final Color PENDING_TEXT_COLOR = new Color(59, 130, 246);
-    private static final Color ACCEPTED_TEXT_COLOR = new Color(34, 197, 94);
-    private static final Color REQUIRES_ACTION_TEXT_COLOR = new Color(234, 179, 8);
-    private static final Color DECLINED_TEXT_COLOR = new Color(239, 68, 68);
 
     /**
      * Configuration class for standard board customization.

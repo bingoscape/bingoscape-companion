@@ -30,43 +30,6 @@ public class BingoScapeApiService {
         this.config = config;
     }
 
-    public void fetchActiveEvents(Consumer<List<EventData>> onSuccess, Consumer<String> onError) {
-        if (!hasApiKey()) {
-            onError.accept("No API key configured");
-            return;
-        }
-
-        String apiUrl = config.apiBaseUrl() + "/api/runelite/events";
-        Request request = new Request.Builder()
-                .url(apiUrl)
-                .header("Authorization", "Bearer " + config.apiKey())
-                .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                log.error("Failed to fetch events", e);
-                onError.accept("Failed to fetch events: " + e.getMessage());
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful() || responseBody == null) {
-                        String error = "Unsuccessful response: " + response;
-                        log.error(error);
-                        onError.accept(error);
-                        return;
-                    }
-
-                    String jsonData = responseBody.string();
-                    EventData[] eventsResponse = gson.fromJson(jsonData, EventData[].class);
-                    onSuccess.accept(Arrays.asList(eventsResponse));
-                }
-            }
-        });
-    }
-
     public void refreshBingoBoard(UUID bingoId, Consumer<Bingo> onSuccess, Consumer<String> onError) {
         if (!hasApiKey()) {
             onError.accept("No API key configured");

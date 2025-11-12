@@ -23,6 +23,12 @@ import net.runelite.client.task.Schedule;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.overlay.OverlayManager;
 import org.bingoscape.services.BingoScapeApiService;
+import org.bingoscape.services.AutoSubmissionHandler;
+import org.bingoscape.services.TileRequirementMatcher;
+import org.bingoscape.utils.EventComparator;
+import org.bingoscape.utils.EventFilter;
+import net.runelite.client.events.NpcLootReceived;
+import net.runelite.client.plugins.loottracker.LootReceived;
 
 import java.time.temporal.ChronoUnit;
 import java.awt.image.BufferedImage;
@@ -96,6 +102,12 @@ public class BingoScapePlugin extends Plugin {
 
     @Inject
     private BingoScapeApiService apiService;
+
+    @Inject
+    private TileRequirementMatcher requirementMatcher;
+
+    @Inject
+    private AutoSubmissionHandler autoSubmissionHandler;
 
     // Plugin components
     private NavigationButton navButton;
@@ -182,7 +194,7 @@ public class BingoScapePlugin extends Plugin {
             return;
         }
 
-        apiService.fetchActiveEvents(
+        apiService.fetchEvents(
             events -> {
                 activeEvents.clear();
                 activeEvents.addAll(events);
@@ -194,52 +206,12 @@ public class BingoScapePlugin extends Plugin {
     }
 
     private void sortEvents(List<EventData> events) {
-        Date now = new Date();
-        
         // Filter events based on configuration
-        events.removeIf(event -> {
-            // Filter past events
-            if (config.hidePastEvents() && event.getEndDate().before(now)) {
-                return true;
-            }
-            
-            // Filter locked events
-            if (config.hideLockedEvents() && event.isLocked()) {
-                return true;
-            }
-            
-            // Filter upcoming events
-            if (config.hideUpcomingEvents() && event.getStartDate().after(now)) {
-                return true;
-            }
-            
-            return false;
-        });
+        EventFilter filter = new EventFilter(config);
+        events.removeIf(filter.createRemovalPredicate());
 
-        // Sort remaining events
-        events.sort((e1, e2) -> {
-            // First sort by locked status (active events first)
-            if (e1.isLocked() != e2.isLocked()) {
-                return e1.isLocked() ? 1 : -1;
-            }
-
-            // Then sort by start date (upcoming events first)
-            boolean e1Upcoming = e1.getStartDate().after(now);
-            boolean e2Upcoming = e2.getStartDate().after(now);
-            
-            if (e1Upcoming != e2Upcoming) {
-                return e1Upcoming ? -1 : 1;
-            }
-
-            // For events with the same status, sort by start date (most recent first)
-            int dateComparison = e2.getStartDate().compareTo(e1.getStartDate());
-            if (dateComparison != 0) {
-                return dateComparison;
-            }
-
-            // Finally, sort alphabetically by title
-            return e1.getTitle().compareToIgnoreCase(e2.getTitle());
-        });
+        // Sort remaining events using complex business rules
+        events.sort(new EventComparator());
     }
 
     public void setEventDetails(EventData eventData) {
@@ -256,6 +228,16 @@ public class BingoScapePlugin extends Plugin {
     public void selectBingo(Bingo bingo) {
         currentBingo = bingo;
         panel.displayBingoBoard(currentBingo);
+
+        // Rebuild requirement matcher lookup maps for auto-submission
+        // The matcher will query currentBingo directly from the plugin
+        requirementMatcher.rebuildLookupMaps();
+
+        if (bingo != null) {
+            log.info("Selected bingo '{}' - Auto-submission ready. {}", bingo.getTitle(), requirementMatcher.getStats());
+        } else {
+            log.info("Cleared bingo selection - Auto-submission disabled");
+        }
     }
 
     public void takeScreenshot(UUID tileId, Consumer<byte[]> callback) {
@@ -327,6 +309,10 @@ public class BingoScapePlugin extends Plugin {
         }
         currentBingo = updatedBingo;
         panel.displayBingoBoard(updatedBingo);
+
+        // Rebuild requirement matcher lookup maps after bingo changes
+        // The matcher will query currentBingo directly from the plugin
+        requirementMatcher.rebuildLookupMaps();
     }
 
     private void showErrorMessage(String message) {
@@ -353,6 +339,21 @@ public class BingoScapePlugin extends Plugin {
 
     public BingoScapePanel getPanel() {
         return panel;
+    }
+
+    @Subscribe
+    public void onNpcLootReceived(NpcLootReceived event) {
+        autoSubmissionHandler.onNpcLootReceived(event);
+    }
+
+    @Subscribe
+    public void onLootReceived(LootReceived event) {
+        autoSubmissionHandler.onLootReceived(event);
+    }
+
+    @Schedule(period = 60, unit = ChronoUnit.SECONDS)
+    public void cleanupAutoSubmissionCooldowns() {
+        autoSubmissionHandler.cleanupCooldowns();
     }
 
     @Provides
