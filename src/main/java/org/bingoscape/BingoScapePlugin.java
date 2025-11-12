@@ -43,6 +43,7 @@ import okhttp3.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.bingoscape.models.*;
+import org.bingoscape.models.AutoSubmissionMetadata;
 
 import java.util.Arrays;
 import java.util.List;
@@ -289,6 +290,38 @@ public class BingoScapePlugin extends Plugin {
                 }
             }
         );
+    }
+
+    /**
+     * Submits a tile completion automatically with metadata.
+     * Used by the auto-submission handler to include context about the drop.
+     */
+    public void submitTileAutomaticWithMetadata(UUID tileId, byte[] screenshotBytes, AutoSubmissionMetadata metadata) {
+        apiService.submitTileAutomatic(
+            tileId,
+            screenshotBytes,
+            metadata,
+            updatedBingo -> {
+                log.info("Auto-submission successful for tile {}", tileId);
+                updateCurrentBingoAndPanel(updatedBingo);
+            },
+            error -> {
+                log.error("Auto-submission failed: {}", error);
+                if (error.contains(HTTP_STATUS_LOCKED)) { // HTTP 423 Locked
+                    refreshBingoBoard();
+                }
+            }
+        );
+    }
+
+    /**
+     * Gets the current logged-in RuneScape account name.
+     */
+    public String getAccountName() {
+        if (client.getLocalPlayer() != null) {
+            return client.getLocalPlayer().getName();
+        }
+        return null;
     }
 
     public void refreshBingoBoard() {
