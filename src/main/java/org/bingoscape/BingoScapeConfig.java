@@ -110,4 +110,34 @@ public interface BingoScapeConfig extends Config
             description = "Comma-separated list of pinned tile IDs"
     )
     void pinnedTileIds(String ids);
+
+    @ConfigItem(
+            keyName = "enableAutoSubmission",
+            name = "Enable Auto-Submission",
+            description = "Automatically submit tiles when requirements are met (e.g., when you obtain a required item)"
+    )
+    default boolean enableAutoSubmission()
+    {
+        return false; // Off by default for safety
+    }
+
+    @ConfigItem(
+            keyName = "autoSubmitLoot",
+            name = "Auto-Submit Loot",
+            description = "Automatically submit tiles when required items are obtained from loot"
+    )
+    default boolean autoSubmitLoot()
+    {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "showAutoSubmitNotifications",
+            name = "Show Auto-Submit Notifications",
+            description = "Display chat notifications when tiles are automatically submitted"
+    )
+    default boolean showAutoSubmitNotifications()
+    {
+        return true;
+    }
 }

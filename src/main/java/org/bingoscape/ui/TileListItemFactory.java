@@ -4,11 +4,9 @@ import net.runelite.client.ui.ColorScheme;
 import org.bingoscape.BingoScapePlugin;
 import org.bingoscape.models.Tile;
 import org.bingoscape.models.TileSubmissionType;
+import org.bingoscape.ui.ColorPalette;
 
 import javax.swing.*;
-import javax.swing.border.CompoundBorder;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -38,10 +36,7 @@ public class TileListItemFactory {
     public JPanel createDetailedTileListItem(Tile tile, Consumer<Tile> onClickAction, Consumer<String> onRemoveAction) {
         JPanel listItem = new JPanel(new BorderLayout());
         listItem.setBackground(ColorPalette.PINNED_TILE_BG);
-        listItem.setBorder(new CompoundBorder(
-            new LineBorder(getStatusColor(tile), 2, true),
-            new EmptyBorder(10, 12, 10, 12)
-        ));
+        listItem.setBorder(UIStyleFactory.createStyledBorder(getStatusColor(tile), 2, 10, 12, 10, 12));
         listItem.setMaximumSize(new Dimension(Integer.MAX_VALUE, listItem.getPreferredSize().height));
 
         // Left side: Header image
@@ -75,10 +70,7 @@ public class TileListItemFactory {
     public JPanel createCompactTileListItem(Tile tile, Consumer<Tile> onClickAction, Consumer<String> onRemoveAction) {
         JPanel listItem = new JPanel(new BorderLayout());
         listItem.setBackground(ColorPalette.PINNED_TILE_BG);
-        listItem.setBorder(new CompoundBorder(
-            new LineBorder(getStatusColor(tile), 1, true),
-            new EmptyBorder(6, 8, 6, 8)
-        ));
+        listItem.setBorder(UIStyleFactory.createStyledBorder(getStatusColor(tile), 1, 6, 8, 6, 8));
         listItem.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
 
         // Left: Smaller icon
@@ -87,7 +79,7 @@ public class TileListItemFactory {
         // Center: Title only
         JPanel titlePanel = new JPanel(new BorderLayout());
         titlePanel.setOpaque(false);
-        titlePanel.setBorder(new EmptyBorder(0, 8, 0, 8));
+        titlePanel.setBorder(UIStyleFactory.createPaddingBorder(0, 8, 0, 8));
 
         JLabel titleLabel = new JLabel(tile.getTitle());
         titleLabel.setForeground(Color.WHITE);
@@ -124,7 +116,7 @@ public class TileListItemFactory {
             imageLabel.setPreferredSize(new Dimension(size, size));
             imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
             if (size > 30) {
-                imageLabel.setBorder(new LineBorder(ColorPalette.BORDER, 1, true));
+                imageLabel.setBorder(UIStyleFactory.createRoundedBorder(ColorPalette.BORDER, 1));
             }
 
             // Load image asynchronously
@@ -146,7 +138,7 @@ public class TileListItemFactory {
             iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
             iconLabel.setPreferredSize(new Dimension(size, size));
             if (size > 30) {
-                iconLabel.setBorder(new LineBorder(ColorPalette.BORDER, 1, true));
+                iconLabel.setBorder(UIStyleFactory.createRoundedBorder(ColorPalette.BORDER, 1));
                 iconLabel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
                 iconLabel.setOpaque(true);
             }
@@ -163,7 +155,7 @@ public class TileListItemFactory {
         JPanel detailsPanel = new JPanel();
         detailsPanel.setLayout(new BoxLayout(detailsPanel, BoxLayout.Y_AXIS));
         detailsPanel.setOpaque(false);
-        detailsPanel.setBorder(new EmptyBorder(0, 12, 0, 12));
+        detailsPanel.setBorder(UIStyleFactory.createPaddingBorder(0, 12, 0, 12));
 
         JLabel titleLabel = new JLabel(tile.getTitle());
         titleLabel.setForeground(Color.WHITE);
@@ -177,7 +169,7 @@ public class TileListItemFactory {
                 ? tile.getDescription().substring(0, 77) + "..."
                 : tile.getDescription();
             JLabel descLabel = new JLabel("<html>" + truncatedDesc + "</html>");
-            descLabel.setForeground(new Color(156, 163, 175));
+            descLabel.setForeground(ColorPalette.TEXT_SECONDARY_GRAY);
             descLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
             descLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             detailsPanel.add(descLabel);
@@ -214,7 +206,7 @@ public class TileListItemFactory {
         if (tile.getTier() != null && tile.getTier() > 1) {
             rightPanel.add(Box.createHorizontalStrut(4));
             JLabel tierLabel = new JLabel("T" + tile.getTier());
-            tierLabel.setForeground(new Color(156, 163, 175));
+            tierLabel.setForeground(ColorPalette.TEXT_SECONDARY_GRAY);
             tierLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, compact ? 8 : 9));
             rightPanel.add(tierLabel);
         }
@@ -227,41 +219,41 @@ public class TileListItemFactory {
      */
     private void addTileInteraction(JPanel listItem, Tile tile, Consumer<Tile> onClickAction,
                                     Consumer<String> onRemoveAction, boolean compact) {
+        // Pre-calculate colors and borders for hover effects
+        final Color originalBg = ColorPalette.PINNED_TILE_BG;
+        final Color hoverBg = UIStyleFactory.brighten(originalBg, 10);
+        final Color statusColor = getStatusColor(tile);
+        final Color hoverBorderColor = UIStyleFactory.brighten(statusColor, 40);
+
+        final int borderWidth = compact ? 1 : 2;
+        final int paddingVert = compact ? 6 : 10;
+        final int paddingHoriz = compact ? 8 : 12;
+
         listItem.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (e.isShiftDown()) {
                     onRemoveAction.accept(tile.getId().toString());
                 } else {
-                    // Pass the event to get the source component for popup positioning
                     SwingUtilities.invokeLater(() -> onClickAction.accept(tile));
                 }
             }
 
             @Override
             public void mouseEntered(MouseEvent e) {
-                Color brighterBg = new Color(
-                    Math.min(255, ColorPalette.PINNED_TILE_BG.getRed() + 10),
-                    Math.min(255, ColorPalette.PINNED_TILE_BG.getGreen() + 10),
-                    Math.min(255, ColorPalette.PINNED_TILE_BG.getBlue() + 10)
-                );
-                listItem.setBackground(brighterBg);
+                listItem.setBackground(hoverBg);
                 listItem.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-                listItem.setBorder(new CompoundBorder(
-                    new LineBorder(getStatusColor(tile).brighter(), compact ? 1 : 2, true),
-                    new EmptyBorder(compact ? 6 : 10, compact ? 8 : 12, compact ? 6 : 10, compact ? 8 : 12)
+                listItem.setBorder(UIStyleFactory.createStyledBorder(
+                    hoverBorderColor, borderWidth, paddingVert, paddingHoriz, paddingVert, paddingHoriz
                 ));
             }
 
             @Override
             public void mouseExited(MouseEvent e) {
-                listItem.setBackground(ColorPalette.PINNED_TILE_BG);
+                listItem.setBackground(originalBg);
                 listItem.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
-
-                listItem.setBorder(new CompoundBorder(
-                    new LineBorder(getStatusColor(tile), compact ? 1 : 2, true),
-                    new EmptyBorder(compact ? 6 : 10, compact ? 8 : 12, compact ? 6 : 10, compact ? 8 : 12)
+                listItem.setBorder(UIStyleFactory.createStyledBorder(
+                    statusColor, borderWidth, paddingVert, paddingHoriz, paddingVert, paddingHoriz
                 ));
             }
         });
@@ -291,31 +283,20 @@ public class TileListItemFactory {
 
     /**
      * Gets the display color for a tile based on its submission status.
+     * Delegates to StatusConstants for consistency.
      */
     private Color getStatusColor(Tile tile) {
         if (tile.getSubmission() == null || tile.getSubmission().getStatus() == null) {
             return ColorPalette.BORDER;
         }
-
-        switch (tile.getSubmission().getStatus()) {
-            case PENDING: return ColorPalette.ACCENT_BLUE;
-            case ACCEPTED: return ColorPalette.SUCCESS;
-            case REQUIRES_INTERACTION: return ColorPalette.WARNING_YELLOW;
-            case DECLINED: return ColorPalette.ERROR_RED;
-            default: return ColorPalette.BORDER;
-        }
+        return StatusConstants.getStatusColor(tile.getSubmission().getStatus());
     }
 
     /**
      * Gets human-readable status text.
+     * Delegates to StatusConstants for consistency.
      */
     private String getStatusText(TileSubmissionType status) {
-        switch (status) {
-            case PENDING: return "Pending";
-            case ACCEPTED: return "Completed";
-            case REQUIRES_INTERACTION: return "Action Needed";
-            case DECLINED: return "Declined";
-            default: return "Not Submitted";
-        }
+        return StatusConstants.getStatusText(status);
     }
 }

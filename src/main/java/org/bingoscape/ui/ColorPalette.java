@@ -14,11 +14,16 @@ public final class ColorPalette {
     public static final Color ACCENT_BLUE = new Color(59, 130, 246);
     public static final Color WARNING_YELLOW = new Color(234, 179, 8);
     public static final Color ERROR_RED = new Color(239, 68, 68);
+    public static final Color WHITE = new Color(255, 255, 255);
 
     // Background Colors
     public static final Color PINNED_TILE_BG = new Color(45, 55, 72);
     public static final Color CARD_BG = new Color(55, 65, 81);
     public static final Color HEADER_BG = new Color(31, 41, 55);
+
+    // Tier Background Colors
+    public static final Color TIER_3_PURPLE = new Color(168, 85, 247);
+    public static final Color TIER_4_ORANGE = new Color(245, 158, 11);
 
     // Border Colors
     public static final Color BORDER = new Color(75, 85, 99);
@@ -40,6 +45,11 @@ public final class ColorPalette {
     public static final Color ACCEPTED_TEXT = new Color(34, 197, 94);
     public static final Color REQUIRES_ACTION_TEXT = new Color(234, 179, 8);
     public static final Color DECLINED_TEXT = new Color(239, 68, 68);
+
+    // General Text Colors
+    public static final Color TIER_LABEL_BLUE = new Color(200, 200, 255);
+    public static final Color TEXT_SECONDARY_GRAY = new Color(156, 163, 175);
+    public static final Color TEXT_MEDIUM_GRAY = new Color(107, 114, 128);
 
     // Private constructor to prevent instantiation
     private ColorPalette() {

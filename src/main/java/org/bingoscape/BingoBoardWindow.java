@@ -7,6 +7,9 @@ import org.bingoscape.builders.BingoBoardBuilder;
 import org.bingoscape.builders.BingoBoardBuilderFactory;
 import org.bingoscape.builders.BoardType;
 import org.bingoscape.builders.TileClickCallback;
+import org.bingoscape.ui.ColorPalette;
+import org.bingoscape.ui.StatusConstants;
+import org.bingoscape.constants.BingoTypeConstants;
 
 import javax.swing.*;
 import javax.swing.border.CompoundBorder;
@@ -46,27 +49,6 @@ public class BingoBoardWindow extends JFrame {
     private static final int DETAIL_IMAGE_SIZE = 150;
     private static final int IMAGE_MARGIN = 10;
     private static final int IMAGE_TITLE_OFFSET = 20;
-
-    // Color Constants
-    private static final Color GOLD_COLOR = new Color(255, 215, 0);
-
-    // Status Background Colors
-    private static final Color PENDING_BG_COLOR = new Color(30, 64, 122);
-    private static final Color ACCEPTED_BG_COLOR = new Color(17, 99, 47);
-    private static final Color REQUIRES_ACTION_BG_COLOR = new Color(117, 89, 4);
-    private static final Color DECLINED_BG_COLOR = new Color(120, 34, 34);
-
-    // Status Border Colors
-    private static final Color PENDING_BORDER_COLOR = new Color(59, 130, 246);
-    private static final Color ACCEPTED_BORDER_COLOR = new Color(34, 197, 94);
-    private static final Color REQUIRES_ACTION_BORDER_COLOR = new Color(234, 179, 8);
-    private static final Color DECLINED_BORDER_COLOR = new Color(239, 68, 68);
-
-    // Status Text Colors
-    private static final Color PENDING_TEXT_COLOR = new Color(59, 130, 246);
-    private static final Color ACCEPTED_TEXT_COLOR = new Color(34, 197, 94);
-    private static final Color REQUIRES_ACTION_TEXT_COLOR = new Color(234, 179, 8);
-    private static final Color DECLINED_TEXT_COLOR = new Color(239, 68, 68);
 
     // Layout Constants
     private static final int SMALL_SPACING = 4;
@@ -395,15 +377,15 @@ public class BingoBoardWindow extends JFrame {
         
         // XP label on the right
         JLabel xpLabel = new JLabel(String.valueOf(tile.getWeight()) + " XP");
-        xpLabel.setForeground(GOLD_COLOR);
+        xpLabel.setForeground(ColorPalette.GOLD);
         xpLabel.setFont(new Font(xpLabel.getFont().getName(), Font.BOLD, SMALL_FONT_SIZE));
         xpLabel.setHorizontalAlignment(SwingConstants.RIGHT);
         topPanel.add(xpLabel, BorderLayout.EAST);
         
         // Add tier indicator for progressive bingos
-        if (currentBingo != null && "progression".equals(currentBingo.getBingoType()) && tile.getTier() != null) {
+        if (currentBingo != null && BingoTypeConstants.isProgressive(currentBingo.getBingoType()) && tile.getTier() != null) {
             JLabel tierLabel = new JLabel("T" + tile.getTier());
-            tierLabel.setForeground(new Color(200, 200, 255));
+            tierLabel.setForeground(ColorPalette.TIER_LABEL_BLUE);
             tierLabel.setFont(new Font(tierLabel.getFont().getName(), Font.BOLD, SMALL_FONT_SIZE));
             tierLabel.setHorizontalAlignment(SwingConstants.LEFT);
             topPanel.add(tierLabel, BorderLayout.WEST);
@@ -481,7 +463,7 @@ public class BingoBoardWindow extends JFrame {
                 .append(" XP");
         
         // Add tier information for progressive bingos
-        if (currentBingo != null && "progression".equals(currentBingo.getBingoType()) && tile.getTier() != null) {
+        if (currentBingo != null && BingoTypeConstants.isProgressive(currentBingo.getBingoType()) && tile.getTier() != null) {
             tooltip.append(" - Tier ").append(tile.getTier());
         }
         
@@ -496,8 +478,8 @@ public class BingoBoardWindow extends JFrame {
 
         // Add submission status if available
         if (tile.getSubmission() != null && tile.getSubmission().getStatus() != null) {
-            String statusText = getStatusText(tile.getSubmission().getStatus());
-            String statusColor = getStatusHexColor(tile.getSubmission().getStatus());
+            String statusText = StatusConstants.getStatusText(tile.getSubmission().getStatus());
+            String statusColor = StatusConstants.getStatusHexColor(tile.getSubmission().getStatus());
 
             tooltip.append("<div style='margin-top: 8px;'><b>Status:</b> ")
                     .append("<span style='color: ")
@@ -546,18 +528,8 @@ public class BingoBoardWindow extends JFrame {
             return ColorScheme.DARK_GRAY_COLOR;
         }
 
-        switch (submission.getStatus()) {
-            case PENDING:
-                return PENDING_BG_COLOR;
-            case ACCEPTED:
-                return ACCEPTED_BG_COLOR;
-            case REQUIRES_INTERACTION:
-                return REQUIRES_ACTION_BG_COLOR;
-            case DECLINED:
-                return DECLINED_BG_COLOR;
-            default:
-                return ColorScheme.DARK_GRAY_COLOR;
-        }
+        Color bgColor = StatusConstants.getStatusBackgroundColor(submission.getStatus());
+        return bgColor != null ? bgColor : ColorScheme.DARK_GRAY_COLOR;
     }
 
     // Get border color based on submission status
@@ -565,34 +537,8 @@ public class BingoBoardWindow extends JFrame {
         if (submission == null || submission.getStatus() == null)
             return ColorScheme.BORDER_COLOR;
 
-        switch (submission.getStatus()) {
-            case PENDING:
-                return PENDING_BORDER_COLOR;
-            case ACCEPTED:
-                return ACCEPTED_BORDER_COLOR;
-            case REQUIRES_INTERACTION:
-                return REQUIRES_ACTION_BORDER_COLOR;
-            case DECLINED:
-                return DECLINED_BORDER_COLOR;
-            default:
-                return ColorScheme.BORDER_COLOR;
-        }
-    }
-
-    // Get hex color for tooltip based on submission status
-    private String getStatusHexColor(TileSubmissionType status) {
-        switch (status) {
-            case PENDING:
-                return "#3b82f6"; // Blue
-            case ACCEPTED:
-                return "#22c55e"; // Green
-            case REQUIRES_INTERACTION:
-                return "#eab308"; // Yellow
-            case DECLINED:
-                return "#ef4444"; // Red
-            default:
-                return "#ffffff"; // White
-        }
+        Color borderColor = StatusConstants.getStatusBorderColor(submission.getStatus());
+        return borderColor != null ? borderColor : ColorScheme.BORDER_COLOR;
     }
 
     private void addStatusOverlay(JPanel panel, TileSubmission submission) {
@@ -603,27 +549,13 @@ public class BingoBoardWindow extends JFrame {
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
         statusLabel.setFont(new Font(statusLabel.getFont().getName(), Font.BOLD, MEDIUM_FONT_SIZE));
 
-        switch (submission.getStatus()) {
-            case PENDING:
-                statusLabel.setText("PENDING");
-                statusLabel.setForeground(PENDING_TEXT_COLOR);
-                break;
-            case ACCEPTED:
-                statusLabel.setText("COMPLETED");
-                statusLabel.setForeground(ACCEPTED_TEXT_COLOR);
-                break;
-            case REQUIRES_INTERACTION:
-                statusLabel.setText("NEEDS ACTION");
-                statusLabel.setForeground(REQUIRES_ACTION_TEXT_COLOR);
-                break;
-            case DECLINED:
-                statusLabel.setText("DECLINED");
-                statusLabel.setForeground(DECLINED_TEXT_COLOR);
-                break;
-            default:
-                // No overlay for NOT_SUBMITTED
-                return;
+        // Skip overlay for NOT_SUBMITTED status
+        if (submission.getStatus() == TileSubmissionType.NOT_SUBMITTED) {
+            return;
         }
+
+        statusLabel.setText(StatusConstants.getStatusText(submission.getStatus()).toUpperCase());
+        statusLabel.setForeground(StatusConstants.getStatusColor(submission.getStatus()));
 
         overlayPanel.add(statusLabel, BorderLayout.SOUTH);
         panel.add(overlayPanel, BorderLayout.SOUTH);
@@ -880,7 +812,7 @@ public class BingoBoardWindow extends JFrame {
     
     private JLabel createTileXpLabel(Tile tile) {
         StringBuilder tileInfoText = new StringBuilder("XP: " + tile.getWeight());
-        if (currentBingo != null && "progression".equals(currentBingo.getBingoType()) && tile.getTier() != null) {
+        if (currentBingo != null && BingoTypeConstants.isProgressive(currentBingo.getBingoType()) && tile.getTier() != null) {
             tileInfoText.append(" | Tier: ").append(tile.getTier());
         }
         
@@ -969,23 +901,11 @@ public class BingoBoardWindow extends JFrame {
     }
 
     private String getStatusText(TileSubmissionType status) {
-        switch (status) {
-            case PENDING: return "Pending Review";
-            case ACCEPTED: return "Completed";
-            case REQUIRES_INTERACTION: return "Needs Action";
-            case DECLINED: return "Declined";
-            default: return "Not Submitted";
-        }
+        return StatusConstants.getStatusText(status);
     }
 
     private Color getStatusColor(TileSubmissionType status) {
-        switch (status) {
-            case PENDING: return PENDING_TEXT_COLOR;
-            case ACCEPTED: return ACCEPTED_TEXT_COLOR;
-            case REQUIRES_INTERACTION: return REQUIRES_ACTION_TEXT_COLOR;
-            case DECLINED: return DECLINED_TEXT_COLOR;
-            default: return Color.LIGHT_GRAY;
-        }
+        return StatusConstants.getStatusColor(status);
     }
 
     private JPanel createTileImagePanel(Tile tile) {
@@ -1144,7 +1064,7 @@ public class BingoBoardWindow extends JFrame {
         
         if (tilePinModeActive || shiftPressed) {
             // In pin mode or shift-clicked, add tile to side panel
-            if (plugin.getPanel().pinnedTileIds.contains(tile.getId().toString())) {
+            if (plugin.getPanel().isPinnedTile(tile.getId().toString())) {
                 // Tile is already pinned, remove it
                 plugin.getPanel().removePinnedTile(tile.getId().toString());
                 showStatusMessage("Tile unpinned: " + tile.getTitle());
@@ -1170,7 +1090,7 @@ public class BingoBoardWindow extends JFrame {
         
         if (tilePinModeActive) {
             tilePinModeButton.setContentAreaFilled(true);
-            tilePinModeButton.setBackground(ACCEPTED_BG_COLOR);
+            tilePinModeButton.setBackground(ColorPalette.ACCEPTED_BG);
             tilePinModeButton.setToolTipText("Pin Mode Active - Click tiles to pin/unpin");
             showStatusMessage("Pin mode activated - Click tiles to add them to the side panel");
         } else {
@@ -1186,7 +1106,7 @@ public class BingoBoardWindow extends JFrame {
     private void showStatusMessage(String message) {
         // Create a temporary label that shows the message
         JLabel statusLabel = new JLabel(message);
-        statusLabel.setForeground(GOLD_COLOR);
+        statusLabel.setForeground(ColorPalette.GOLD);
         statusLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
         

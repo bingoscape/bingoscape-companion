@@ -15,6 +15,7 @@ import org.bingoscape.ui.UIConstants;
 import org.bingoscape.ui.UIEffects;
 import org.bingoscape.ui.PinnedTilesManager;
 import org.bingoscape.ui.TileListItemFactory;
+import org.bingoscape.ui.ScreenshotHandler;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -42,20 +43,7 @@ import java.util.Date;
 import javax.swing.DefaultComboBoxModel;
 
 public class BingoScapePanel extends PluginPanel {
-    // Note: Layout and color constants moved to UIConstants and ColorPalette classes
-
-    // Legacy constants for backward compatibility (will be removed)
-    @Deprecated private static final int BUTTON_SIZE = UIConstants.BUTTON_SIZE;
-    @Deprecated private static final int QUICK_ACTION_BUTTON_SIZE = UIConstants.QUICK_ACTION_BUTTON_SIZE;
-    @Deprecated private static final Color GOLD_COLOR = ColorPalette.GOLD;
-    @Deprecated private static final Color SUCCESS_COLOR = ColorPalette.SUCCESS;
-    @Deprecated private static final Color ACCENT_BLUE = ColorPalette.ACCENT_BLUE;
-    @Deprecated private static final Color WARNING_YELLOW = ColorPalette.WARNING_YELLOW;
-    @Deprecated private static final Color ERROR_RED = ColorPalette.ERROR_RED;
-    @Deprecated private static final Color PINNED_TILE_BG = ColorPalette.PINNED_TILE_BG;
-    @Deprecated private static final Color CARD_BG = ColorPalette.CARD_BG;
-    @Deprecated private static final Color HEADER_BG = ColorPalette.HEADER_BG;
-    @Deprecated private static final Color BORDER_COLOR = ColorPalette.BORDER;
+    // Note: Layout and color constants are in UIConstants and ColorPalette classes
 
     // Components
     private final JPanel mainContentPanel = new JPanel();
@@ -77,9 +65,7 @@ public class BingoScapePanel extends PluginPanel {
     // Managers
     private PinnedTilesManager pinnedTilesManager;
     private TileListItemFactory tileFactory;
-
-    // Legacy pinned tiles access (deprecated - use pinnedTilesManager instead)
-    @Deprecated public final Set<String> pinnedTileIds = new HashSet<>();
+    private ScreenshotHandler screenshotHandler;
 
     // Reference to plugin and other resources
     private final BingoScapePlugin plugin;
@@ -98,6 +84,7 @@ public class BingoScapePanel extends PluginPanel {
 
         // Initialize managers and factories
         this.tileFactory = new TileListItemFactory(plugin);
+        this.screenshotHandler = new ScreenshotHandler(plugin, this);
         this.pinnedTilesManager = new PinnedTilesManager(
             plugin,
             this::showTileQuickActionsForPinnedTile,
@@ -181,22 +168,22 @@ public class BingoScapePanel extends PluginPanel {
     
     private JPanel createHeaderSection() {
         JPanel header = new JPanel(new BorderLayout());
-        header.setBackground(HEADER_BG);
+        header.setBackground(ColorPalette.HEADER_BG);
         header.setBorder(new CompoundBorder(
-            new LineBorder(BORDER_COLOR, 1, true),
+            new LineBorder(ColorPalette.BORDER, 1, true),
             new EmptyBorder(10, 12, 10, 12)
         ));
         header.setAlignmentX(Component.LEFT_ALIGNMENT);
         
         // Left: Branding
         JPanel branding = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        branding.setBackground(HEADER_BG);
+        branding.setBackground(ColorPalette.HEADER_BG);
         
         JLabel icon = new JLabel("🎯");
         icon.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
         
         JLabel name = new JLabel("BingoScape");
-        name.setForeground(GOLD_COLOR);
+        name.setForeground(ColorPalette.GOLD);
         name.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
         name.setBorder(new EmptyBorder(0, 6, 0, 0));
         
@@ -205,7 +192,7 @@ public class BingoScapePanel extends PluginPanel {
         
         // Right: Actions
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-        actions.setBackground(HEADER_BG);
+        actions.setBackground(ColorPalette.HEADER_BG);
         actions.add(screenshotButton);
         actions.add(refreshButton);
         
@@ -307,7 +294,7 @@ public class BingoScapePanel extends PluginPanel {
                 }
 
                 if (isSelected) {
-                    setBackground(ACCENT_BLUE);
+                    setBackground(ColorPalette.ACCENT_BLUE);
                 } else {
                     setBackground(ColorScheme.DARKER_GRAY_COLOR);
                 }
@@ -457,7 +444,7 @@ public class BingoScapePanel extends PluginPanel {
                     SwingUtilities.invokeLater(() -> completeReload(savedState));
                 });
             } else {
-                eventSelector.setForeground(new Color(UIConstants.MAX_ALPHA, UIConstants.MAX_ALPHA, UIConstants.MAX_ALPHA, (int)alpha));
+                eventSelector.setForeground(new Color(ColorPalette.WHITE.getRed(), ColorPalette.WHITE.getGreen(), ColorPalette.WHITE.getBlue(), (int)alpha));
             }
         });
         fadeTimer.start();
@@ -476,7 +463,7 @@ public class BingoScapePanel extends PluginPanel {
             if (fadeInAlpha >= UIConstants.MAX_ALPHA) {
                 fadeTimer.stop();
             }
-            eventSelector.setForeground(new Color(UIConstants.MAX_ALPHA, UIConstants.MAX_ALPHA, UIConstants.MAX_ALPHA, (int)fadeInAlpha));
+            eventSelector.setForeground(new Color(ColorPalette.WHITE.getRed(), ColorPalette.WHITE.getGreen(), ColorPalette.WHITE.getBlue(), (int)fadeInAlpha));
         });
         fadeTimer.start();
     }
@@ -523,7 +510,7 @@ public class BingoScapePanel extends PluginPanel {
                 }
 
                 if (isSelected) {
-                    setBackground(ACCENT_BLUE);
+                    setBackground(ColorPalette.ACCENT_BLUE);
                 } else {
                     setBackground(ColorScheme.DARKER_GRAY_COLOR);
                 }
@@ -550,21 +537,21 @@ public class BingoScapePanel extends PluginPanel {
 
     private JButton createShowBingoBoardButton() {
         JButton button = new JButton("Show Bingo Board");
-        button.setBackground(ACCENT_BLUE);
+        button.setBackground(ColorPalette.ACCENT_BLUE);
         button.setForeground(Color.WHITE);
         button.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
         button.setFocusPainted(false);
-        button.setBorder(new LineBorder(ACCENT_BLUE, 2, true));
+        button.setBorder(new LineBorder(ColorPalette.ACCENT_BLUE, 2, true));
         button.setPreferredSize(new Dimension(0, 32));
 
         button.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseEntered(java.awt.event.MouseEvent evt) {
-                button.setBackground(ACCENT_BLUE.brighter());
+                button.setBackground(ColorPalette.ACCENT_BLUE.brighter());
             }
             @Override
             public void mouseExited(java.awt.event.MouseEvent evt) {
-                button.setBackground(ACCENT_BLUE);
+                button.setBackground(ColorPalette.ACCENT_BLUE);
             }
         });
 
@@ -578,6 +565,9 @@ public class BingoScapePanel extends PluginPanel {
     }
 
     private void showBingoBoardWindow(Bingo bingo) {
+        // Ensure the plugin's currentBingo is set for auto-submission
+        plugin.selectBingo(bingo);
+
         SwingUtilities.invokeLater(() -> {
             if (bingoBoardWindow != null) {
                 bingoBoardWindow.dispose();
@@ -776,21 +766,7 @@ public class BingoScapePanel extends PluginPanel {
 
     // New methods for enhanced functionality
     private void openScreenshotDialog() {
-        // Take a screenshot of the RuneLite client
-        plugin.takeScreenshot(null, (screenshotBytes) -> {
-            if (screenshotBytes != null) {
-                SwingUtilities.invokeLater(() -> {
-                    showScreenshotPreviewDialog(screenshotBytes);
-                });
-            } else {
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(this,
-                        "Failed to take screenshot.",
-                        "Screenshot Error",
-                        JOptionPane.ERROR_MESSAGE);
-                });
-            }
-        });
+        screenshotHandler.openScreenshotDialog();
     }
 
     private void showScreenshotPreviewDialog(byte[] screenshotBytes) {
@@ -860,84 +836,38 @@ public class BingoScapePanel extends PluginPanel {
     }
 
     private void showTileScreenshotPreviewDialog(Tile tile, byte[] screenshotBytes) {
-        JDialog previewDialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Screenshot for " + tile.getTitle(), true);
-        previewDialog.setSize(600, 550);
-        previewDialog.setLocationRelativeTo(this);
-        previewDialog.setLayout(new BorderLayout());
-
-        // Display the screenshot
-        JLabel screenshotLabel = new JLabel(new ImageIcon(screenshotBytes));
-        JScrollPane scrollPane = new JScrollPane(screenshotLabel);
-        scrollPane.setPreferredSize(new Dimension(580, 400));
-        previewDialog.add(scrollPane, BorderLayout.CENTER);
-
-        // Add info label with tile details
-        JPanel infoPanel = new JPanel(new BorderLayout());
-        JLabel infoLabel = new JLabel("<html><center><b>" + tile.getTitle() + "</b><br>" +
-                                     "Screenshot taken! You can submit, save, or close.</center></html>");
-        infoLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        infoLabel.setBorder(new EmptyBorder(10, 10, 10, 10));
-        infoPanel.add(infoLabel, BorderLayout.CENTER);
-        previewDialog.add(infoPanel, BorderLayout.NORTH);
-
-        // Button panel
-        JPanel buttonPanel = new JPanel(new FlowLayout());
-        buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-        JButton submitButton = new JButton("Submit for " + tile.getTitle());
-        JButton saveButton = new JButton("Save Image");
-        JButton closeButton = new JButton("Close");
-
-        submitButton.addActionListener(e -> {
-            plugin.submitTileCompletionWithScreenshot(tile.getId(), screenshotBytes);
-            previewDialog.dispose();
-            JOptionPane.showMessageDialog(this,
-                "Screenshot submitted for " + tile.getTitle(),
-                "Submission Complete",
-                JOptionPane.INFORMATION_MESSAGE);
-        });
-
-        saveButton.addActionListener(e -> {
-            saveScreenshotToFile(screenshotBytes);
-        });
-
-        closeButton.addActionListener(e -> previewDialog.dispose());
-
-        buttonPanel.add(submitButton);
-        buttonPanel.add(saveButton);
-        buttonPanel.add(closeButton);
-
-        previewDialog.add(buttonPanel, BorderLayout.SOUTH);
-        previewDialog.setVisible(true);
+        screenshotHandler.showTileScreenshotPreviewDialog(tile, screenshotBytes);
     }
 
 
     private void refreshCurrentBoard() {
         Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
         if (selectedBingo != null && bingoBoardWindow != null && bingoBoardWindow.isVisible()) {
-            displayBingoBoard(selectedBingo);
+            // Use selectBingo to ensure requirement matcher is updated
+            plugin.selectBingo(selectedBingo);
         }
     }
 
     public void addPinnedTile(Tile tile) {
         pinnedTilesManager.addPinnedTile(tile);
         // Update legacy field for backward compatibility
-        pinnedTileIds.clear();
-        pinnedTileIds.addAll(pinnedTilesManager.getPinnedTileIds());
+        // Sync with pinnedTilesManager (no longer needed with direct manager usage)
     }
 
     public void removePinnedTile(String tileId) {
         pinnedTilesManager.removePinnedTile(tileId);
         // Update legacy field for backward compatibility
-        pinnedTileIds.clear();
-        pinnedTileIds.addAll(pinnedTilesManager.getPinnedTileIds());
+        // Sync with pinnedTilesManager (no longer needed with direct manager usage)
+    }
+
+    public boolean isPinnedTile(String tileId) {
+        return pinnedTilesManager.getPinnedTileIds().contains(tileId);
     }
 
     public void refreshPinnedTiles() {
         pinnedTilesManager.refreshPinnedTiles(currentBingo);
         // Update legacy field for backward compatibility
-        pinnedTileIds.clear();
-        pinnedTileIds.addAll(pinnedTilesManager.getPinnedTileIds());
+        // Sync with pinnedTilesManager (no longer needed with direct manager usage)
     }
 
     /**
@@ -1039,9 +969,9 @@ public class BingoScapePanel extends PluginPanel {
 
     private JPanel createEventCard(EventData eventData) {
         JPanel card = new JPanel(new BorderLayout());
-        card.setBackground(CARD_BG);
+        card.setBackground(ColorPalette.CARD_BG);
         card.setBorder(new CompoundBorder(
-            new LineBorder(BORDER_COLOR, 1, true),
+            new LineBorder(ColorPalette.BORDER, 1, true),
             new EmptyBorder(8, 10, 8, 10)
         ));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1049,17 +979,17 @@ public class BingoScapePanel extends PluginPanel {
 
         // Top row: Title and status
         JPanel topRow = new JPanel(new BorderLayout());
-        topRow.setBackground(CARD_BG);
+        topRow.setBackground(ColorPalette.CARD_BG);
 
         JLabel titleLabel = new JLabel(eventData.getTitle());
         titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
-        titleLabel.setForeground(GOLD_COLOR);
+        titleLabel.setForeground(ColorPalette.GOLD);
 
         // Status indicator
         JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 0));
-        statusPanel.setBackground(CARD_BG);
+        statusPanel.setBackground(ColorPalette.CARD_BG);
 
-        Color statusColor = eventData.isLocked() ? Color.LIGHT_GRAY : SUCCESS_COLOR;
+        Color statusColor = eventData.isLocked() ? Color.LIGHT_GRAY : ColorPalette.SUCCESS;
         String statusText = eventData.isLocked() ? "Locked" : "Active";
 
         JLabel statusDot = new JLabel("●");
@@ -1078,7 +1008,7 @@ public class BingoScapePanel extends PluginPanel {
 
         // Bottom row: Key info - simplified
         JPanel bottomRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 2));
-        bottomRow.setBackground(CARD_BG);
+        bottomRow.setBackground(ColorPalette.CARD_BG);
 
         if (eventData.getUserTeam() != null) {
             addSimpleInfoChip(bottomRow, "👥", eventData.getUserTeam().getName());
@@ -1098,7 +1028,7 @@ public class BingoScapePanel extends PluginPanel {
         JPanel chip = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         chip.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         chip.setBorder(new CompoundBorder(
-            new LineBorder(BORDER_COLOR, 1, true),
+            new LineBorder(ColorPalette.BORDER, 1, true),
             new EmptyBorder(2, 6, 2, 6)
         ));
 
