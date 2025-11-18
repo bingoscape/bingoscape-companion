@@ -654,9 +654,9 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         
         // Set background and border based on submission status using factory
         getTileFactory().applyTileAppearance(panel, tile.getSubmission());
-        
-        // Set tooltip using shared factory
-        panel.setToolTipText(getTileFactory().createDetailedTooltip(tile, getCurrentBingo()));
+
+        // Attach hover card with detailed information using shared factory
+        getTileFactory().attachHoverCard(panel, tile, getCurrentBingo(), plugin.getItemManager());
         
         // Add image if available, otherwise show title using factory
         if (tile.getHeaderImage() != null && !tile.getHeaderImage().isEmpty()) {
@@ -667,13 +667,13 @@ public class ProgressiveBingoBoardBuilder extends BingoBoardBuilder {
         
         // Add XP value indicator using factory (no tier indicator for progressive tiles)
         getTileFactory().addXpIndicator(panel, tile);
-        
-        // Add status overlay using factory
-        getTileFactory().addStatusOverlay(panel, tile);
-        
+
+        // Add bottom overlays (status + progress indicator) using factory
+        getTileFactory().addBottomOverlays(panel, tile);
+
         // Add click behavior using factory
         getTileFactory().addTileInteractionListeners(panel, tile, tileClickCallback);
-        
+
         return panel;
     }
     
