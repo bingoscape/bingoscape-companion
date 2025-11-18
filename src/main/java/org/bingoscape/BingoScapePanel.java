@@ -958,11 +958,9 @@ public class BingoScapePanel extends PluginPanel {
     public void displayBingoBoard(Bingo bingo) {
         // Update the bingo board window if it's open
         if (bingoBoardWindow != null && bingoBoardWindow.isVisible()) {
-            // Close and reopen with fresh data to ensure a full refresh
+            // Update existing window smoothly instead of recreating
             SwingUtilities.invokeLater(() -> {
-                bingoBoardWindow.dispose();
-                bingoBoardWindow = new BingoBoardWindow(plugin, bingo);
-                bingoBoardWindow.setVisible(true);
+                bingoBoardWindow.updateBingoBoard(bingo);
             });
         }
     }

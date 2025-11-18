@@ -170,12 +170,12 @@ public class BingoBoardWindow extends JFrame {
         tilePinModeButton.addActionListener(e -> toggleTilePinMode());
 
         // Add reload button
-        JButton reloadButton = new JButton();
-        reloadButton.setIcon(new ImageIcon(getClass().getResource("/refresh_icon.png")));
+        JButton reloadButton = new JButton("🔄");
         reloadButton.setToolTipText("Reload Board");
         reloadButton.setPreferredSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
         reloadButton.setMaximumSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
         reloadButton.setMinimumSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
+        reloadButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
         reloadButton.setFocusPainted(false);
         reloadButton.setContentAreaFilled(false);
         reloadButton.setForeground(Color.WHITE);
@@ -245,6 +245,13 @@ public class BingoBoardWindow extends JFrame {
     }
 
     public void updateBingoBoard(Bingo bingo) {
+        // Skip update if it's the same bingo data (no changes)
+        if (this.currentBingo != null &&
+            this.currentBingo.getId().equals(bingo.getId()) &&
+            bingoDataUnchanged(this.currentBingo, bingo)) {
+            return;
+        }
+
         this.currentBingo = bingo;
         SwingUtilities.invokeLater(() -> {
             String windowTitle = "BingoScape - " + bingo.getTitle();
@@ -253,14 +260,52 @@ public class BingoBoardWindow extends JFrame {
                 windowTitle += " | Codephrase: " + bingo.getCodephrase();
             }
             titleLabel.setText(windowTitle);
+            // Only call updateBoardLayout once - it handles everything
             updateBoardLayout(bingo);
-            displayBingoBoard(bingo);
         });
+    }
+
+    /**
+     * Checks if bingo data is unchanged to avoid unnecessary updates.
+     * Compares key fields that would require a UI refresh.
+     */
+    private boolean bingoDataUnchanged(Bingo oldBingo, Bingo newBingo) {
+        // Quick check - if tile count changed, definitely need update
+        if (oldBingo.getTiles() == null || newBingo.getTiles() == null) {
+            return false;
+        }
+        if (oldBingo.getTiles().size() != newBingo.getTiles().size()) {
+            return false;
+        }
+
+        // Check if any tile submissions changed
+        for (int i = 0; i < oldBingo.getTiles().size(); i++) {
+            Tile oldTile = oldBingo.getTiles().get(i);
+            Tile newTile = newBingo.getTiles().get(i);
+
+            if (!oldTile.getId().equals(newTile.getId())) {
+                return false; // Tiles reordered
+            }
+
+            // Check if submission status changed
+            TileSubmission oldSub = oldTile.getSubmission();
+            TileSubmission newSub = newTile.getSubmission();
+
+            if (oldSub == null && newSub != null) return false;
+            if (oldSub != null && newSub == null) return false;
+            if (oldSub != null && newSub != null) {
+                if (oldSub.getStatus() != newSub.getStatus()) return false;
+                if (oldSub.getSubmissionCount() != newSub.getSubmissionCount()) return false;
+            }
+        }
+
+        return true; // No meaningful changes detected
     }
 
     /**
      * Displays the bingo board using the builder pattern.
      * This method is simplified as the builders now handle the display logic.
+     * Note: This is now only called from the constructor. Regular updates use updateBingoBoard().
      */
     private void displayBingoBoard(Bingo bingo) {
         SwingUtilities.invokeLater(() -> {
@@ -270,8 +315,8 @@ public class BingoBoardWindow extends JFrame {
                 bingoBoard.repaint();
                 return;
             }
-            
-            // The builder handles all display logic now
+
+            // The builder handles all display logic
             updateBoardLayout(bingo);
         });
     }
