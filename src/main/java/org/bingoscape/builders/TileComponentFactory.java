@@ -5,7 +5,10 @@ import org.bingoscape.models.*;
 import org.bingoscape.ui.ColorPalette;
 import org.bingoscape.ui.StatusConstants;
 import org.bingoscape.ui.TileTooltipBuilder;
+import org.bingoscape.ui.TileHoverCardManager;
 import org.bingoscape.ui.UIStyleFactory;
+import org.bingoscape.ui.components.TileProgressBar;
+import org.bingoscape.utils.GoalTreeProgressCalculator;
 import org.bingoscape.constants.BingoTypeConstants;
 
 import javax.swing.*;
@@ -179,6 +182,98 @@ public class TileComponentFactory {
             panel.add(overlayPanel, BorderLayout.SOUTH);
         }
     }
+
+    /**
+     * Adds both status overlay and progress indicator to the bottom of a tile panel.
+     * This method combines both components to avoid BorderLayout conflicts.
+     *
+     * @param panel The tile panel
+     * @param tile The tile data
+     */
+    public void addBottomOverlays(JPanel panel, Tile tile) {
+        // Create a container for bottom components using BoxLayout for vertical stacking
+        JPanel bottomPanel = new JPanel();
+        bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.Y_AXIS));
+        bottomPanel.setOpaque(false);
+
+        // Add status overlay if needed
+        boolean hasStatus = tile.getSubmission() != null &&
+                           tile.getSubmission().getStatus() != null &&
+                           tile.getSubmission().getStatus() != TileSubmissionType.NOT_SUBMITTED;
+
+        if (hasStatus) {
+            JLabel statusLabel = new JLabel();
+            statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
+            statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            statusLabel.setFont(new Font(statusLabel.getFont().getName(), Font.BOLD, MEDIUM_FONT_SIZE));
+            statusLabel.setText(StatusConstants.getStatusText(tile.getSubmission().getStatus()).toUpperCase());
+            statusLabel.setForeground(StatusConstants.getStatusColor(tile.getSubmission().getStatus()));
+            bottomPanel.add(statusLabel);
+        }
+
+        // Add progress indicator if tile has goals
+        if (tile.getGoalTree() != null && !tile.getGoalTree().isEmpty()) {
+            GoalTreeProgressCalculator.ProgressResult progress =
+                GoalTreeProgressCalculator.getProgressFromTile(tile.getGoalTree());
+
+            if (progress != null) {
+                TileProgressBar progressBar = TileProgressBar.createProgressBar(progress);
+                if (progressBar != null) {
+                    progressBar.setAlignmentX(Component.CENTER_ALIGNMENT);
+                    bottomPanel.add(progressBar);
+                }
+            }
+        }
+
+        // Only add the bottom panel if it has content
+        if (bottomPanel.getComponentCount() > 0) {
+            panel.add(bottomPanel, BorderLayout.SOUTH);
+        }
+    }
+
+    /**
+     * Adds a progress indicator to a tile panel showing goal completion.
+     * Only displays if the tile has goals defined in its goal tree.
+     *
+     * The progress bar is positioned at the bottom of the tile and shows:
+     * - Overall completion percentage
+     * - Visual progress bar with color coding (green=complete, yellow=partial, gray=none)
+     * - Only evaluates root-level goals (not nested children)
+     *
+     * @param panel The tile panel
+     * @param tile The tile data with goal tree
+     * @deprecated Use addBottomOverlays() instead to avoid layout conflicts
+     */
+    @Deprecated
+    public void addProgressIndicator(JPanel panel, Tile tile) {
+        if (tile.getGoalTree() == null || tile.getGoalTree().isEmpty()) {
+            return; // No goals to show progress for
+        }
+
+        // Calculate progress from root-level goal tree
+        GoalTreeProgressCalculator.ProgressResult progress =
+            GoalTreeProgressCalculator.getProgressFromTile(tile.getGoalTree());
+
+        if (progress == null) {
+            return; // Unable to calculate progress
+        }
+
+        // Create progress bar component
+        TileProgressBar progressBar = TileProgressBar.createProgressBar(progress);
+        if (progressBar == null) {
+            return;
+        }
+
+        // Create a container panel for the progress bar
+        // This allows proper positioning at the bottom without interfering with other components
+        JPanel progressContainer = new JPanel(new BorderLayout());
+        progressContainer.setOpaque(false);
+        progressContainer.add(progressBar, BorderLayout.SOUTH);
+
+        // Add to the main panel
+        // Note: This will be layered with other SOUTH components via the existing panel structure
+        panel.add(progressContainer, BorderLayout.PAGE_END);
+    }
     
     /**
      * Adds hover and click behavior to a tile panel.
@@ -273,9 +368,24 @@ public class TileComponentFactory {
      * @param tile The tile data
      * @param currentBingo The current bingo for context
      * @return HTML tooltip string
+     * @deprecated Use attachHoverCard() instead for richer UI experience
      */
+    @Deprecated
     public String createDetailedTooltip(Tile tile, Bingo currentBingo) {
         return tooltipBuilder.buildTooltip(tile, currentBingo);
+    }
+
+    /**
+     * Attaches a rich hover card to a tile panel.
+     * The hover card displays tile information in a custom popup matching the web app design.
+     *
+     * @param panel The tile panel to attach the hover card to
+     * @param tile The tile data
+     * @param bingo The current bingo for context
+     * @param itemManager The item manager for loading item images
+     */
+    public void attachHoverCard(JPanel panel, Tile tile, Bingo bingo, net.runelite.client.game.ItemManager itemManager) {
+        TileHoverCardManager.getInstance().attachHoverCard(panel, tile, bingo, itemManager);
     }
     
     // Private helper methods

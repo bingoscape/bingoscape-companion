@@ -110,6 +110,10 @@ public class BingoScapePlugin extends Plugin {
     @Inject
     private AutoSubmissionHandler autoSubmissionHandler;
 
+    @Getter
+    @Inject
+    private net.runelite.client.game.ItemManager itemManager;
+
     // Plugin components
     private NavigationButton navButton;
     private BingoScapePanel panel;
