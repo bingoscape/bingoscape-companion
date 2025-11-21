@@ -1,7 +1,10 @@
 package org.bingoscape.services;
 
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.ChatMessageType;
+import net.runelite.api.Client;
 import net.runelite.api.NPC;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.loottracker.LootReceived;
@@ -37,6 +40,12 @@ public class AutoSubmissionHandler {
 
     @Inject
     private org.bingoscape.notifications.NotificationManager notificationManager;
+
+    @Inject
+    private Client client;
+
+    @Inject
+    private ClientThread clientThread;
 
     /**
      * Handles NPC loot received events (most common source of item drops).
@@ -112,7 +121,13 @@ public class AutoSubmissionHandler {
                         continue;
                     }
 
-                    // Submit this tile with full metadata (notification will be shown after successful submission)
+                    // Show notification immediately when item is obtained
+                    if (config.showAutoSubmitNotifications()) {
+                        String itemName = getItemName(itemId);
+                        showNotification("Bingo Item", String.format("Obtained %s - auto-submitting...", itemName));
+                    }
+
+                    // Submit this tile with full metadata
                     submitTileAutomaticWithMetadata(tileId, itemId, sourceName, npcId, sourceType);
                 }
             }
@@ -148,17 +163,17 @@ public class AutoSubmissionHandler {
         plugin.takeScreenshot(tileId, screenshotBytes -> {
             if (screenshotBytes == null) {
                 log.error("Failed to capture screenshot for tile {}", tileId);
-                showNotification("Auto-submission failed: could not capture screenshot");
+                showChatMessage("Auto-submission failed: could not capture screenshot");
                 return;
             }
 
             // Submit to API with metadata
             plugin.submitTileAutomaticWithMetadata(tileId, screenshotBytes, metadata);
 
-            // Show combined notification if enabled
+            // Log success in chatbox
             if (config.showAutoSubmitNotifications()) {
                 String itemName = getItemName(itemId);
-                showNotification("Bingo Item", String.format("Obtained %s - Tile submitted!", itemName));
+                showChatMessage(String.format("Tile auto-submitted for %s", itemName));
             }
         });
     }
@@ -238,6 +253,15 @@ public class AutoSubmissionHandler {
      */
     private void showNotification(String message) {
         showNotification("BingoScape", message);
+    }
+
+    /**
+     * Shows a message in the game chatbox.
+     */
+    private void showChatMessage(String message) {
+        clientThread.invokeLater(() ->
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "BingoScape: " + message, null));
+        log.info("Auto-submission chat message: {}", message);
     }
 
     /**
