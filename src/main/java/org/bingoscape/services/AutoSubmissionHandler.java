@@ -35,6 +35,9 @@ public class AutoSubmissionHandler {
     @Inject
     private TileRequirementMatcher requirementMatcher;
 
+    @Inject
+    private org.bingoscape.notifications.NotificationManager notificationManager;
+
     /**
      * Handles NPC loot received events (most common source of item drops).
      */
@@ -109,7 +112,7 @@ public class AutoSubmissionHandler {
                         continue;
                     }
 
-                    // Submit this tile with full metadata
+                    // Submit this tile with full metadata (notification will be shown after successful submission)
                     submitTileAutomaticWithMetadata(tileId, itemId, sourceName, npcId, sourceType);
                 }
             }
@@ -152,9 +155,10 @@ public class AutoSubmissionHandler {
             // Submit to API with metadata
             plugin.submitTileAutomaticWithMetadata(tileId, screenshotBytes, metadata);
 
-            // Show notification if enabled
+            // Show combined notification if enabled
             if (config.showAutoSubmitNotifications()) {
-                showNotification(String.format("Auto-submitted tile for %s!", sourceName));
+                String itemName = getItemName(itemId);
+                showNotification("Bingo Item", String.format("Obtained %s - Tile submitted!", itemName));
             }
         });
     }
@@ -211,12 +215,41 @@ public class AutoSubmissionHandler {
     }
 
     /**
-     * Shows a notification to the user (delegates to plugin).
+     * Shows a toast notification to the user.
+     */
+    private void showNotification(String title, String message) {
+        if (!config.showAutoSubmitNotifications()) {
+            return;
+        }
+
+        // Add toast notification if enabled
+        if (config.showToastNotifications()) {
+            // Convert Color to RGB int for notification
+            int color = config.notificationColor().getRGB() & 0xFFFFFF;
+            notificationManager.addNotification(title, message, color);
+        }
+
+        // Keep log for debugging
+        log.info("Auto-submission notification: {} - {}", title, message);
+    }
+
+    /**
+     * Shows a notification with default title.
      */
     private void showNotification(String message) {
-        // Use the plugin's existing notification method
-        // The plugin will handle displaying this in the game chat
-        log.info("Auto-submission notification: {}", message);
+        showNotification("BingoScape", message);
+    }
+
+    /**
+     * Gets the display name for an item ID.
+     */
+    private String getItemName(int itemId) {
+        try {
+            return plugin.getItemManager().getItemComposition(itemId).getName();
+        } catch (Exception e) {
+            log.warn("Failed to get item name for ID {}", itemId, e);
+            return "Item #" + itemId;
+        }
     }
 
     /**
