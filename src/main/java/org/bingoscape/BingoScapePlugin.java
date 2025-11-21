@@ -110,6 +110,9 @@ public class BingoScapePlugin extends Plugin {
     @Inject
     private AutoSubmissionHandler autoSubmissionHandler;
 
+    @Inject
+    private org.bingoscape.notifications.NotificationManager notificationManager;
+
     @Getter
     @Inject
     private net.runelite.client.game.ItemManager itemManager;
@@ -142,6 +145,7 @@ public class BingoScapePlugin extends Plugin {
 
         clientToolbar.addNavigation(navButton);
         overlayManager.add(codephraseOverlay);
+        notificationManager.startUp();
 
         // Load all events and handle pinned bingo
         if (hasApiKey()) {
@@ -177,6 +181,7 @@ public class BingoScapePlugin extends Plugin {
 
     @Override
     protected void shutDown() {
+        notificationManager.shutDown();
         clientToolbar.removeNavigation(navButton);
         overlayManager.remove(codephraseOverlay);
     }

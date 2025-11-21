@@ -3,6 +3,9 @@ package org.bingoscape;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.ConfigSection;
+
+import java.awt.Color;
 
 @ConfigGroup("bingoscape")
 public interface BingoScapeConfig extends Config
@@ -134,10 +137,39 @@ public interface BingoScapeConfig extends Config
     @ConfigItem(
             keyName = "showAutoSubmitNotifications",
             name = "Show Auto-Submit Notifications",
-            description = "Display chat notifications when tiles are automatically submitted"
+            description = "Display notifications when tiles are automatically submitted"
     )
     default boolean showAutoSubmitNotifications()
     {
         return true;
+    }
+
+    @ConfigSection(
+            name = "Notifications",
+            description = "Toast notification settings",
+            position = 10
+    )
+    String notificationSection = "notifications";
+
+    @ConfigItem(
+            keyName = "showToastNotifications",
+            name = "Show Toast Notifications",
+            description = "Display in-game toast notifications for bingo events",
+            section = notificationSection
+    )
+    default boolean showToastNotifications()
+    {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "notificationColor",
+            name = "Notification Color",
+            description = "Color of toast notifications (requires restart to take effect)",
+            section = notificationSection
+    )
+    default Color notificationColor()
+    {
+        return new Color(255, 98, 0); // BingoScape orange
     }
 }

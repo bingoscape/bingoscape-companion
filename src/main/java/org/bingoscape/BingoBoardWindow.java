@@ -9,6 +9,7 @@ import org.bingoscape.builders.BoardType;
 import org.bingoscape.builders.TileClickCallback;
 import org.bingoscape.ui.ColorPalette;
 import org.bingoscape.ui.StatusConstants;
+import org.bingoscape.ui.ButtonFactory;
 import org.bingoscape.constants.BingoTypeConstants;
 
 import javax.swing.*;
@@ -132,62 +133,46 @@ public class BingoBoardWindow extends JFrame {
         buttonContainer.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
         // Add pin button
-        JButton pinButton = new JButton(isPinned() ? "Un-📌" : "📌");
-        pinButton.setFocusPainted(false);
-        pinButton.setContentAreaFilled(false);
-        pinButton.setForeground(Color.WHITE);
-        pinButton.setBorder(new EmptyBorder(0, MEDIUM_SPACING, 0, MEDIUM_SPACING));
-        pinButton.setToolTipText(isPinned() ? "Unpin Board" : "Pin Board");
-
-        // Add hover effect for pin button
-        addHoverEffect(pinButton);
+        JButton pinButton = ButtonFactory.createIconButton(
+            isPinned() ? "📌" : "📍",
+            isPinned() ? "Unpin Board" : "Pin Board",
+            BUTTON_SIZE
+        );
 
         // Add pin action
         pinButton.addActionListener(e -> {
             if (isPinned()) {
                 plugin.unpinBingo();
-                pinButton.setText("📌");
+                pinButton.setText("📍");
                 pinButton.setToolTipText("Pin Board");
             } else {
                 plugin.pinBingo(currentBingo.getId());
-                pinButton.setText("Un-📌");
+                pinButton.setText("📌");
                 pinButton.setToolTipText("Unpin Board");
             }
         });
 
         // Add tile pin mode button
-        tilePinModeButton = new JButton("📌🎯");
-        tilePinModeButton.setToolTipText("Pin Tiles Mode - Click tiles to add to side panel");
-        tilePinModeButton.setFocusPainted(false);
-        tilePinModeButton.setContentAreaFilled(false);
-        tilePinModeButton.setForeground(Color.WHITE);
-        tilePinModeButton.setBorder(new EmptyBorder(0, MEDIUM_SPACING, 0, MEDIUM_SPACING));
-
-        // Add hover effect for tile pin mode button
-        addHoverEffect(tilePinModeButton);
+        tilePinModeButton = ButtonFactory.createIconButton(
+            "🎯",
+            "Pin Tiles Mode - Click tiles to add to side panel",
+            BUTTON_SIZE
+        );
 
         // Add tile pin mode toggle action
         tilePinModeButton.addActionListener(e -> toggleTilePinMode());
 
         // Add reload button
-        JButton reloadButton = new JButton("🔄");
-        reloadButton.setToolTipText("Reload Board");
-        reloadButton.setPreferredSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
-        reloadButton.setMaximumSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
-        reloadButton.setMinimumSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
-        reloadButton.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
-        reloadButton.setFocusPainted(false);
-        reloadButton.setContentAreaFilled(false);
-        reloadButton.setForeground(Color.WHITE);
-        reloadButton.setBorder(new EmptyBorder(0, MEDIUM_SPACING, 0, MEDIUM_SPACING));
+        JButton reloadButton = ButtonFactory.createIconButton(
+            "🔄",
+            "Reload Board",
+            BUTTON_SIZE
+        );
 
         // Create a container panel for the button to ensure proper spacing
         buttonContainer.add(pinButton);
         buttonContainer.add(tilePinModeButton);
         buttonContainer.add(reloadButton);
-
-        // Add hover effect
-        addHoverEffect(reloadButton);
 
         // Add reload action
         reloadButton.addActionListener(e -> {
@@ -1027,21 +1012,21 @@ public class BingoBoardWindow extends JFrame {
     }
 
     private JPanel createDialogButtonPanel(JDialog dialog, Tile tile) {
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
         buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-        JButton cancelButton = new JButton("Cancel");
-        JButton submitButton = new JButton("Take & Review Screenshot");
+        JButton cancelButton = ButtonFactory.createSecondaryButton("Cancel", "Close this dialog");
+        JButton submitButton = ButtonFactory.createPrimaryButton("📷 Take Screenshot", "Take and review screenshot");
 
         // If tile is already completed, adjust the UI accordingly
         if (tile.getSubmission() != null &&
                 tile.getSubmission().getStatus() == TileSubmissionType.ACCEPTED) {
-            submitButton.setText("Already Completed");
+            submitButton.setText("✓ Already Completed");
             submitButton.setEnabled(false);
         }
 
         if (currentBingo.isLocked()) {
-            submitButton.setText("Submissions locked");
+            submitButton.setText("🔒 Submissions Locked");
             submitButton.setEnabled(false);
         }
 
@@ -1076,11 +1061,11 @@ public class BingoBoardWindow extends JFrame {
         JLabel screenshotLabel = new JLabel(new ImageIcon(screenshotBytes));
         previewDialog.add(new JScrollPane(screenshotLabel), BorderLayout.CENTER);
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
         buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-        JButton cancelButton = new JButton("Cancel");
-        JButton submitButton = new JButton("Submit");
+        JButton cancelButton = ButtonFactory.createSecondaryButton("Cancel", "Discard screenshot");
+        JButton submitButton = ButtonFactory.createButton("✓ Submit", "🚀", "Submit tile completion", ButtonFactory.ButtonStyle.SUCCESS);
 
         cancelButton.addActionListener(e -> previewDialog.dispose());
         submitButton.addActionListener(e -> {

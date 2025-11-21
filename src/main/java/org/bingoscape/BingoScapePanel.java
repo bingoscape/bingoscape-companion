@@ -13,6 +13,7 @@ import org.bingoscape.models.TileSubmissionType;
 import org.bingoscape.ui.ColorPalette;
 import org.bingoscape.ui.UIConstants;
 import org.bingoscape.ui.UIEffects;
+import org.bingoscape.ui.ButtonFactory;
 import org.bingoscape.ui.PinnedTilesManager;
 import org.bingoscape.ui.TileListItemFactory;
 import org.bingoscape.ui.ScreenshotHandler;
@@ -373,54 +374,20 @@ public class BingoScapePanel extends PluginPanel {
     }
 
     private JButton createReloadEventsButton() {
-        JButton button = new JButton("🔄");
-        button.setToolTipText("Reload Events");
-        button.setPreferredSize(new Dimension(UIConstants.BUTTON_SIZE, UIConstants.BUTTON_SIZE));
-        button.setMaximumSize(new Dimension(UIConstants.BUTTON_SIZE, UIConstants.BUTTON_SIZE));
-        button.setMinimumSize(new Dimension(UIConstants.BUTTON_SIZE, UIConstants.BUTTON_SIZE));
-        button.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
-        button.setFocusPainted(false);
-        button.setContentAreaFilled(false);
-        button.setBorder(new LineBorder(ColorPalette.BORDER, 1, true));
-        button.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-
-        // Add hover effect using UIEffects utility
-        UIEffects.addButtonHoverEffect(button);
-
+        JButton button = ButtonFactory.createIconButton("🔄", "Reload Events", UIConstants.BUTTON_SIZE);
         button.addActionListener(e -> handleReloadButtonClick());
-
         return button;
     }
 
     private JButton createScreenshotButton() {
-        JButton button = new JButton("📷");
-        button.setToolTipText("Take Screenshot");
-        button.setPreferredSize(new Dimension(UIConstants.QUICK_ACTION_BUTTON_SIZE, UIConstants.QUICK_ACTION_BUTTON_SIZE));
-        button.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
-        button.setFocusPainted(false);
-        button.setContentAreaFilled(false);
-        button.setBorder(new LineBorder(ColorPalette.BORDER, 1, true));
-        button.setBackground(ColorPalette.CARD_BG);
-
-        UIEffects.addButtonHoverEffect(button);
-
+        JButton button = ButtonFactory.createIconButton("📷", "Take Screenshot", UIConstants.QUICK_ACTION_BUTTON_SIZE);
         button.addActionListener(e -> openScreenshotDialog());
         return button;
     }
 
 
     private JButton createRefreshButton() {
-        JButton button = new JButton("⚙️");
-        button.setToolTipText("Settings");
-        button.setPreferredSize(new Dimension(UIConstants.QUICK_ACTION_BUTTON_SIZE, UIConstants.QUICK_ACTION_BUTTON_SIZE));
-        button.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
-        button.setFocusPainted(false);
-        button.setContentAreaFilled(false);
-        button.setBorder(new LineBorder(ColorPalette.BORDER, 1, true));
-        button.setBackground(ColorPalette.CARD_BG);
-
-        UIEffects.addButtonHoverEffect(button);
-
+        JButton button = ButtonFactory.createIconButton("⚙️", "Settings", UIConstants.QUICK_ACTION_BUTTON_SIZE);
         button.addActionListener(e -> refreshCurrentBoard());
         return button;
     }
@@ -536,24 +503,8 @@ public class BingoScapePanel extends PluginPanel {
     }
 
     private JButton createShowBingoBoardButton() {
-        JButton button = new JButton("Show Bingo Board");
-        button.setBackground(ColorPalette.ACCENT_BLUE);
-        button.setForeground(Color.WHITE);
-        button.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-        button.setFocusPainted(false);
-        button.setBorder(new LineBorder(ColorPalette.ACCENT_BLUE, 2, true));
-        button.setPreferredSize(new Dimension(0, 32));
-
-        button.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                button.setBackground(ColorPalette.ACCENT_BLUE.brighter());
-            }
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                button.setBackground(ColorPalette.ACCENT_BLUE);
-            }
-        });
+        JButton button = ButtonFactory.createPrimaryButton("Show Bingo Board", "Open bingo board window");
+        button.setPreferredSize(new Dimension(0, 36));
 
         button.addActionListener(e -> {
             Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
@@ -788,11 +739,11 @@ public class BingoScapePanel extends PluginPanel {
         previewDialog.add(infoLabel, BorderLayout.NORTH);
 
         // Button panel
-        JPanel buttonPanel = new JPanel(new FlowLayout());
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
         buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-        JButton saveButton = new JButton("Save Image");
-        JButton closeButton = new JButton("Close");
+        JButton saveButton = ButtonFactory.createPrimaryButton("💾 Save Image", "Save screenshot to file");
+        JButton closeButton = ButtonFactory.createSecondaryButton("Close", "Close preview");
 
         saveButton.addActionListener(e -> {
             saveScreenshotToFile(screenshotBytes);
