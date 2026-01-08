@@ -16,6 +16,8 @@ import java.util.List;
  */
 public class CompactGoalTreePanel extends JPanel {
 
+    private static final int INDENT_PER_LEVEL = 16; // Pixels to indent per hierarchy level
+
     private final List<GoalTreeNode> goalTree;
     private final ItemManager itemManager;
 
@@ -69,7 +71,9 @@ public class CompactGoalTreePanel extends JPanel {
         JPanel groupPanel = new JPanel();
         groupPanel.setLayout(new BoxLayout(groupPanel, BoxLayout.Y_AXIS));
         groupPanel.setOpaque(false);
-        groupPanel.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
+        // Apply left indentation based on depth for visual hierarchy
+        int leftIndent = depth * INDENT_PER_LEVEL;
+        groupPanel.setBorder(BorderFactory.createEmptyBorder(2, leftIndent, 2, 0));
         groupPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         // Group header row with BorderLayout (similar to goal layout)
@@ -168,7 +172,9 @@ public class CompactGoalTreePanel extends JPanel {
     private void renderGoal(GoalTreeNode goal, int depth, String prefix, boolean isLast) {
         JPanel goalRow = new JPanel(new BorderLayout(StyleConstants.GAP_SMALL, 0));
         goalRow.setOpaque(false);
-        goalRow.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
+        // Apply left indentation based on depth for visual hierarchy
+        int leftIndent = depth * INDENT_PER_LEVEL;
+        goalRow.setBorder(BorderFactory.createEmptyBorder(2, leftIndent, 2, 0));
         goalRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         goalRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40)); // Limit individual goal height
 

@@ -140,7 +140,11 @@ public class TileRequirementMatcher {
         for (UUID tileId : matchingTileIds) {
             Tile tile = getTileById(tileId);
             if (tile != null && !isTileApproved(tile)) {
-                return true; // Found an incomplete tile that needs this item
+                // Check if the specific goal for this item is incomplete
+                // Only return true if there's at least one incomplete goal for this item
+                if (!isGoalCompleteForItem(tile, itemId)) {
+                    return true; // Found an incomplete goal that needs this item
+                }
             }
         }
 
@@ -171,6 +175,13 @@ public class TileRequirementMatcher {
         for (UUID tileId : matchingTileIds) {
             Tile tile = getTileById(tileId);
             if (tile == null || isTileApproved(tile)) {
+                continue;
+            }
+
+            // CRITICAL: Check if the specific goal for this item is already complete
+            // This prevents re-submitting screenshots for goals that are already done
+            if (isGoalCompleteForItem(tile, itemId)) {
+                log.debug("Skipping tile {} for item {} - goal already complete", tileId, itemId);
                 continue;
             }
 
@@ -254,6 +265,70 @@ public class TileRequirementMatcher {
      */
     private boolean isTileApproved(Tile tile) {
         return tile.getSubmission() != null && "approved".equals(tile.getSubmission().getStatus());
+    }
+
+    /**
+     * Checks if a specific goal for an item is already complete.
+     * Searches the goal tree for goals matching the itemId and checks their completion status.
+     *
+     * @param tile The tile to check
+     * @param itemId The item ID to look for
+     * @return true if ALL goals matching this item are already complete
+     */
+    private boolean isGoalCompleteForItem(Tile tile, int itemId) {
+        if (tile.getGoalTree() == null || tile.getGoalTree().isEmpty()) {
+            return false;
+        }
+
+        // Find all goal nodes matching this item
+        List<GoalTreeNode> matchingGoals = findGoalsForItem(tile.getGoalTree(), itemId);
+
+        if (matchingGoals.isEmpty()) {
+            return false; // No goals found for this item
+        }
+
+        // Check if ALL matching goals are complete
+        // (If there are multiple goals for the same item, all must be complete to skip submission)
+        for (GoalTreeNode goal : matchingGoals) {
+            if (goal.getProgress() == null || !goal.getProgress().isComplete()) {
+                return false; // At least one goal is incomplete
+            }
+        }
+
+        log.debug("All goals for item {} in tile {} are complete", itemId, tile.getId());
+        return true; // All goals for this item are complete
+    }
+
+    /**
+     * Recursively finds all goal nodes matching the given itemId in the goal tree.
+     *
+     * @param nodes The goal tree nodes to search
+     * @param itemId The item ID to find
+     * @return List of matching goal nodes
+     */
+    private List<GoalTreeNode> findGoalsForItem(List<GoalTreeNode> nodes, int itemId) {
+        List<GoalTreeNode> result = new ArrayList<>();
+
+        if (nodes == null || nodes.isEmpty()) {
+            return result;
+        }
+
+        for (GoalTreeNode node : nodes) {
+            if (node.isItemGoal() &&
+                node.getItemGoal() != null &&
+                node.getItemGoal().getItemId() != null &&
+                node.getItemGoal().getItemId() == itemId) {
+                // Found a matching goal
+                result.add(node);
+            }
+
+            // Recursively check child nodes
+            if (node.isGroup() && node.getChildren() != null) {
+                result.addAll(findGoalsForItem(node.getChildren(), itemId));
+            }
+        }
+
+        return result;
     }
 
     /**

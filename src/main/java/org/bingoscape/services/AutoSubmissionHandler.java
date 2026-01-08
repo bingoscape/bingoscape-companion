@@ -20,7 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Handles automatic tile submissions when game events match tile requirements.
- * Monitors loot events and triggers screenshot + submission when items are obtained.
+ * Monitors loot events and triggers screenshot + submission when items are
+ * obtained.
  */
 @Slf4j
 @Singleton
@@ -144,11 +145,16 @@ public class AutoSubmissionHandler {
     /**
      * Automatically submits a tile with a screenshot and full metadata.
      */
-    private void submitTileAutomaticWithMetadata(UUID tileId, int itemId, String sourceName, Integer npcId, String sourceType) {
+    private void submitTileAutomaticWithMetadata(UUID tileId, int itemId, String sourceName, Integer npcId,
+            String sourceType) {
         log.info("Auto-submitting tile {} for item {} from {}", tileId, itemId, sourceName);
 
         // Mark this tile as recently submitted
         recentSubmissions.put(tileId, System.currentTimeMillis());
+
+        // Get item name NOW (on client thread) before entering background thread
+        // This must be done here because ItemManager requires the client thread
+        final String itemName = getItemName(itemId);
 
         // Build metadata
         AutoSubmissionMetadata metadata = AutoSubmissionMetadata.builder()
@@ -170,9 +176,8 @@ public class AutoSubmissionHandler {
             // Submit to API with metadata
             plugin.submitTileAutomaticWithMetadata(tileId, screenshotBytes, metadata);
 
-            // Log success in chatbox
+            // Log success in chatbox (use pre-fetched item name from client thread)
             if (config.showAutoSubmitNotifications()) {
-                String itemName = getItemName(itemId);
                 showChatMessage(String.format("Tile auto-submitted for %s", itemName));
             }
         });
@@ -204,12 +209,6 @@ public class AutoSubmissionHandler {
         // Check if auto-submission is enabled
         if (!config.enableAutoSubmission()) {
             log.debug("Auto-submission disabled in config");
-            return false;
-        }
-
-        // Check if loot auto-submission is enabled
-        if (!config.autoSubmitLoot()) {
-            log.debug("Loot auto-submission disabled in config");
             return false;
         }
 
@@ -259,8 +258,8 @@ public class AutoSubmissionHandler {
      * Shows a message in the game chatbox.
      */
     private void showChatMessage(String message) {
-        clientThread.invokeLater(() ->
-                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "BingoScape: " + message, null));
+        clientThread.invokeLater(
+                () -> client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "BingoScape: " + message, null));
         log.info("Auto-submission chat message: {}", message);
     }
 
@@ -281,18 +280,15 @@ public class AutoSubmissionHandler {
      */
     public void cleanupCooldowns() {
         long now = System.currentTimeMillis();
-        recentSubmissions.entrySet().removeIf(entry ->
-                now - entry.getValue() > SUBMISSION_COOLDOWN_MS
-        );
+        recentSubmissions.entrySet().removeIf(entry -> now - entry.getValue() > SUBMISSION_COOLDOWN_MS);
     }
 
     /**
      * Gets statistics about auto-submission for debugging.
      */
     public String getStats() {
-        return String.format("Auto-submission: enabled=%s, loot=%s, tiles tracked=%s, recent submissions=%d",
+        return String.format("Auto-submission: enabled=%s, tiles tracked=%s, recent submissions=%d",
                 config.enableAutoSubmission(),
-                config.autoSubmitLoot(),
                 requirementMatcher.hasTrackableTiles(),
                 recentSubmissions.size());
     }

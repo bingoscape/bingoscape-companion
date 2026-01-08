@@ -30,6 +30,7 @@ public class PinnedTilesManager {
 
     private final Set<String> pinnedTileIds = new HashSet<>();
     private final List<Tile> pinnedTiles = new ArrayList<>();
+    private Bingo currentBingo; // Current bingo for hover card display
 
     private JPanel pinnedTilesSection;
     private JScrollPane pinnedTilesScrollPane;
@@ -169,6 +170,7 @@ public class PinnedTilesManager {
      * Refreshes pinned tiles from the current bingo.
      */
     public void refreshPinnedTiles(Bingo currentBingo) {
+        this.currentBingo = currentBingo; // Store bingo reference for hover cards
         pinnedTiles.clear();
         if (currentBingo != null && !pinnedTileIds.isEmpty()) {
             for (Tile tile : currentBingo.getTiles()) {
@@ -247,6 +249,8 @@ public class PinnedTilesManager {
             Tile tile = pinnedTiles.get(i);
             JPanel compactTile = tileFactory.createCompactTileListItem(
                 tile,
+                currentBingo,  // Pass current bingo for hover card
+                plugin.getItemManager(),  // Pass ItemManager for hover card
                 onTileClickAction,
                 this::removePinnedTile
             );

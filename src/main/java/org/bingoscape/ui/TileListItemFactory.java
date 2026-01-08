@@ -5,6 +5,8 @@ import org.bingoscape.BingoScapePlugin;
 import org.bingoscape.models.Tile;
 import org.bingoscape.models.TileSubmissionType;
 import org.bingoscape.ui.ColorPalette;
+import org.bingoscape.ui.components.TileProgressBar;
+import org.bingoscape.utils.GoalTreeProgressCalculator;
 
 import javax.swing.*;
 import java.awt.*;
@@ -63,15 +65,19 @@ public class TileListItemFactory {
      * Creates a compact tile list item for space-efficient display.
      *
      * @param tile The tile to display
+     * @param bingo The bingo board containing this tile (for hover card)
+     * @param itemManager The ItemManager for loading item icons in hover card
      * @param onClickAction Action to perform when tile is clicked
      * @param onRemoveAction Action to perform when tile is removed (Shift+Click)
      * @return A JPanel representing the compact tile
      */
-    public JPanel createCompactTileListItem(Tile tile, Consumer<Tile> onClickAction, Consumer<String> onRemoveAction) {
+    public JPanel createCompactTileListItem(Tile tile, org.bingoscape.models.Bingo bingo,
+                                           net.runelite.client.game.ItemManager itemManager,
+                                           Consumer<Tile> onClickAction, Consumer<String> onRemoveAction) {
         JPanel listItem = new JPanel(new BorderLayout());
         listItem.setBackground(ColorPalette.PINNED_TILE_BG);
         listItem.setBorder(UIStyleFactory.createStyledBorder(getStatusColor(tile), 1, 6, 8, 6, 8));
-        listItem.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        listItem.setMaximumSize(new Dimension(Integer.MAX_VALUE, 52)); // Increased height for progress bar
 
         // Left: Smaller icon
         JPanel imagePanel = createImagePanel(tile, 24, 12);
@@ -89,16 +95,31 @@ public class TileListItemFactory {
         // Right: XP and status
         JPanel rightPanel = createRightInfoPanel(tile, true);
 
-        // Assemble
+        // Assemble main content
         listItem.add(imagePanel, BorderLayout.WEST);
         listItem.add(titlePanel, BorderLayout.CENTER);
         listItem.add(rightPanel, BorderLayout.EAST);
 
+        // Add progress bar at bottom (like board tiles)
+        if (tile.getGoalTree() != null && !tile.getGoalTree().isEmpty()) {
+            GoalTreeProgressCalculator.ProgressResult progress =
+                GoalTreeProgressCalculator.getProgressFromTile(tile.getGoalTree());
+
+            if (progress != null) {
+                TileProgressBar progressBar = TileProgressBar.createProgressBar(progress);
+                if (progressBar != null) {
+                    listItem.add(progressBar, BorderLayout.SOUTH);
+                }
+            }
+        }
+
         // Add interaction
         addTileInteraction(listItem, tile, onClickAction, onRemoveAction, true);
 
-        // Compact tooltip
-        listItem.setToolTipText(createCompactTooltip(tile));
+        // Attach hover card (same as board tiles)
+        if (bingo != null && itemManager != null) {
+            TileHoverCardManager.getInstance().attachHoverCard(listItem, tile, bingo, itemManager);
+        }
 
         return listItem;
     }

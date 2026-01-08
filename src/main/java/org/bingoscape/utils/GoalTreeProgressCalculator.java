@@ -41,10 +41,9 @@ public class GoalTreeProgressCalculator {
             return new ProgressResult(0, 0, false);
         }
 
-        // If there's only one root node and it's a group, use its progress
-        if (goalTree.size() == 1 && goalTree.get(0).isGroup()) {
-            GoalTreeNode rootGroup = goalTree.get(0);
-            return evaluateNode(rootGroup);
+        // If there's only one root node (whether group or goal), use its progress directly
+        if (goalTree.size() == 1) {
+            return evaluateNode(goalTree.get(0));
         }
 
         // Multiple root nodes - evaluate each and aggregate
@@ -75,8 +74,18 @@ public class GoalTreeProgressCalculator {
 
         // If it's a goal (leaf node), check its progress
         if (node.isGoal()) {
-            boolean isComplete = node.getProgress() != null && node.getProgress().isComplete();
-            return new ProgressResult(isComplete ? 1 : 0, 1, isComplete);
+            if (node.getProgress() != null) {
+                // Use the actual progress counts from the API
+                return new ProgressResult(
+                    node.getProgress().getCompletedCount(),
+                    node.getProgress().getTotalCount(),
+                    node.getProgress().isComplete()
+                );
+            }
+
+            // Fallback if progress is null (shouldn't happen, but defensive)
+            int total = node.getTargetValue() != null ? node.getTargetValue() : 1;
+            return new ProgressResult(0, total, false);
         }
 
         // If it's a group, evaluate based on children and logical operator

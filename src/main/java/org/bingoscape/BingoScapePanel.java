@@ -195,7 +195,6 @@ public class BingoScapePanel extends PluginPanel {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         actions.setBackground(ColorPalette.HEADER_BG);
         actions.add(screenshotButton);
-        actions.add(refreshButton);
         
         header.add(branding, BorderLayout.WEST);
         header.add(actions, BorderLayout.EAST);
@@ -907,6 +906,12 @@ public class BingoScapePanel extends PluginPanel {
     }
 
     public void displayBingoBoard(Bingo bingo) {
+        // Update the current bingo reference
+        currentBingo = bingo;
+
+        // Refresh pinned tiles to show updated progress
+        refreshPinnedTiles();
+
         // Update the bingo board window if it's open
         if (bingoBoardWindow != null && bingoBoardWindow.isVisible()) {
             // Update existing window smoothly instead of recreating
