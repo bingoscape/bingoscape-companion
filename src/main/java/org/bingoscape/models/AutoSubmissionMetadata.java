@@ -26,6 +26,11 @@ public class AutoSubmissionMetadata {
     private Integer itemId;
 
     /**
+     * The quantity of the item obtained (for stackable items).
+     */
+    private Integer quantity;
+
+    /**
      * The RuneScape account name of the logged-in player at time of submission.
      */
     private String accountName;
@@ -34,4 +39,29 @@ public class AutoSubmissionMetadata {
      * The type of source (e.g., "NPC loot", "Pickpocket", "Event reward").
      */
     private String sourceType;
+
+    /**
+     * World X coordinate where the drop was acquired.
+     */
+    private Integer worldX;
+
+    /**
+     * World Y coordinate where the drop was acquired.
+     */
+    private Integer worldY;
+
+    /**
+     * Plane/floor level (0-3 typically).
+     */
+    private Integer plane;
+
+    /**
+     * World/server number the player was on.
+     */
+    private Integer worldNumber;
+
+    /**
+     * Region ID calculated from coordinates.
+     */
+    private Integer regionId;
 }

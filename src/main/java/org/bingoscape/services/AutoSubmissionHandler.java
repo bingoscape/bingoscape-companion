@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.NPC;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.game.ItemStack;
@@ -107,6 +108,7 @@ public class AutoSubmissionHandler {
 
         for (ItemStack item : items) {
             int itemId = item.getId();
+            int quantity = item.getQuantity();
 
             // Check if this item is required for any tile
             if (requirementMatcher.isRequiredItem(itemId, npcId)) {
@@ -129,7 +131,7 @@ public class AutoSubmissionHandler {
                     }
 
                     // Submit this tile with full metadata
-                    submitTileAutomaticWithMetadata(tileId, itemId, sourceName, npcId, sourceType);
+                    submitTileAutomaticWithMetadata(tileId, itemId, quantity, sourceName, npcId, sourceType);
                 }
             }
         }
@@ -138,14 +140,14 @@ public class AutoSubmissionHandler {
     /**
      * Automatically submits a tile with a screenshot and metadata.
      */
-    private void submitTileAutomatic(UUID tileId, int itemId, String sourceName) {
-        submitTileAutomaticWithMetadata(tileId, itemId, sourceName, null, "Unknown");
+    private void submitTileAutomatic(UUID tileId, int itemId, int quantity, String sourceName) {
+        submitTileAutomaticWithMetadata(tileId, itemId, quantity, sourceName, null, "Unknown");
     }
 
     /**
      * Automatically submits a tile with a screenshot and full metadata.
      */
-    private void submitTileAutomaticWithMetadata(UUID tileId, int itemId, String sourceName, Integer npcId,
+    private void submitTileAutomaticWithMetadata(UUID tileId, int itemId, int quantity, String sourceName, Integer npcId,
             String sourceType) {
         log.info("Auto-submitting tile {} for item {} from {}", tileId, itemId, sourceName);
 
@@ -156,13 +158,27 @@ public class AutoSubmissionHandler {
         // This must be done here because ItemManager requires the client thread
         final String itemName = getItemName(itemId);
 
+        // Capture location data (must be on client thread like getItemName)
+        WorldPoint location = client.getLocalPlayer().getWorldLocation();
+        final int worldX = location.getX();
+        final int worldY = location.getY();
+        final int plane = location.getPlane();
+        final int worldNumber = client.getWorld();
+        final int regionId = ((worldX >> 6) << 8) | (worldY >> 6);
+
         // Build metadata
         AutoSubmissionMetadata metadata = AutoSubmissionMetadata.builder()
                 .itemId(itemId)
+                .quantity(quantity)
                 .sourceName(sourceName)
                 .npcId(npcId)
                 .sourceType(sourceType)
                 .accountName(getAccountName())
+                .worldX(worldX)
+                .worldY(worldY)
+                .plane(plane)
+                .worldNumber(worldNumber)
+                .regionId(regionId)
                 .build();
 
         // Take screenshot and submit with metadata
