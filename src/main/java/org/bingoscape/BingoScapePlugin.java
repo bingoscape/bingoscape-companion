@@ -38,6 +38,12 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.bingoscape.models.*;
 
+import org.bingoscape.models.AutoSubmissionMetadata;
+import org.bingoscape.services.AutoSubmissionHandler;
+import org.bingoscape.services.TileRequirementMatcher;
+import net.runelite.client.events.NpcLootReceived;
+import net.runelite.client.plugins.loottracker.LootReceived;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -57,6 +63,7 @@ public class BingoScapePlugin extends Plugin {
     private static final String ICON_PATH = "/sidepanel_icon.png";
     private static final String PNG_FORMAT = "png";
     private static final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/png");
+    private static final String HTTP_STATUS_LOCKED = "423";
 
     // Injected components
     @Inject
@@ -96,6 +103,19 @@ public class BingoScapePlugin extends Plugin {
     @Inject
     private BingoScapeApiService apiService;
 
+    @Inject
+    private TileRequirementMatcher requirementMatcher;
+
+    @Inject
+    private AutoSubmissionHandler autoSubmissionHandler;
+
+    @Inject
+    private org.bingoscape.notifications.NotificationManager notificationManager;
+
+    @Getter
+    @Inject
+    private net.runelite.client.game.ItemManager itemManager;
+
     // Plugin components
     private NavigationButton navButton;
     private BingoScapePanel panel;
@@ -124,6 +144,7 @@ public class BingoScapePlugin extends Plugin {
 
         clientToolbar.addNavigation(navButton);
         overlayManager.add(codephraseOverlay);
+        notificationManager.startUp();
 
         // Load all events and handle pinned bingo
         if (hasApiKey()) {
@@ -159,6 +180,7 @@ public class BingoScapePlugin extends Plugin {
 
     @Override
     protected void shutDown() {
+        notificationManager.shutDown();
         clientToolbar.removeNavigation(navButton);
         overlayManager.remove(codephraseOverlay);
     }
@@ -255,6 +277,16 @@ public class BingoScapePlugin extends Plugin {
     public void selectBingo(Bingo bingo) {
         currentBingo = bingo;
         panel.displayBingoBoard(currentBingo);
+
+        // Rebuild requirement matcher lookup maps for auto-submission
+        // The matcher will query currentBingo directly from the plugin
+        requirementMatcher.rebuildLookupMaps();
+
+        if (bingo != null) {
+            log.info("Selected bingo '{}' - Auto-submission ready. {}", bingo.getTitle(), requirementMatcher.getStats());
+        } else {
+            log.info("Cleared bingo selection - Auto-submission disabled");
+        }
     }
 
     public void takeScreenshot(UUID tileId, Consumer<byte[]> callback) {
@@ -301,7 +333,29 @@ public class BingoScapePlugin extends Plugin {
             },
             error -> {
                 showErrorMessage(error);
-                if (error.contains("423")) { // 423 Locked
+                if (error.contains(HTTP_STATUS_LOCKED)) { // 423 Locked
+                    refreshBingoBoard();
+                }
+            }
+        );
+    }
+
+    /**
+     * Submits a tile completion automatically with metadata.
+     * Used by the auto-submission handler to include context about the drop.
+     */
+    public void submitTileAutomaticWithMetadata(UUID tileId, byte[] screenshotBytes, AutoSubmissionMetadata metadata) {
+        apiService.submitTileAutomatic(
+            tileId,
+            screenshotBytes,
+            metadata,
+            updatedBingo -> {
+                log.info("Auto-submission successful for tile {}", tileId);
+                updateCurrentBingoAndPanel(updatedBingo);
+            },
+            error -> {
+                log.error("Auto-submission failed: {}", error);
+                if (error.contains(HTTP_STATUS_LOCKED)) { // HTTP 423 Locked
                     refreshBingoBoard();
                 }
             }
@@ -326,6 +380,10 @@ public class BingoScapePlugin extends Plugin {
         }
         currentBingo = updatedBingo;
         panel.displayBingoBoard(updatedBingo);
+
+        // Rebuild requirement matcher lookup maps after bingo changes
+        // The matcher will query currentBingo directly from the plugin
+        requirementMatcher.rebuildLookupMaps();
     }
 
     private void showErrorMessage(String message) {
@@ -348,6 +406,35 @@ public class BingoScapePlugin extends Plugin {
 
     public void unpinBingo() {
         config.pinnedBingoId("");
+    }
+
+    public BingoScapePanel getPanel() {
+        return panel;
+    }
+
+    /**
+     * Gets the current logged-in RuneScape account name.
+     */
+    public String getAccountName() {
+        if (client != null && client.getLocalPlayer() != null) {
+            return client.getLocalPlayer().getName();
+        }
+        return null;
+    }
+
+    @Subscribe
+    public void onNpcLootReceived(NpcLootReceived event) {
+        autoSubmissionHandler.onNpcLootReceived(event);
+    }
+
+    @Subscribe
+    public void onLootReceived(LootReceived event) {
+        autoSubmissionHandler.onLootReceived(event);
+    }
+
+    @Schedule(period = 60, unit = ChronoUnit.SECONDS)
+    public void cleanupAutoSubmissionCooldowns() {
+        autoSubmissionHandler.cleanupCooldowns();
     }
 
     @Provides
