@@ -13,6 +13,11 @@ import net.runelite.http.api.loottracker.LootRecordType;
 import org.bingoscape.BingoScapeConfig;
 import org.bingoscape.BingoScapePlugin;
 import org.bingoscape.models.AutoSubmissionMetadata;
+import org.bingoscape.models.Tile;
+import org.bingoscape.notifications.DropNotification;
+import org.bingoscape.notifications.DropNotificationOverlay;
+import org.bingoscape.notifications.DropTier;
+import org.bingoscape.notifications.DropTierResolver;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -41,7 +46,7 @@ public class AutoSubmissionHandler {
     private TileRequirementMatcher requirementMatcher;
 
     @Inject
-    private org.bingoscape.notifications.NotificationManager notificationManager;
+    private DropNotificationOverlay dropOverlay;
 
     @Inject
     private Client client;
@@ -116,6 +121,17 @@ public class AutoSubmissionHandler {
 
                 // Get all tiles that can be completed with this item
                 List<UUID> matchingTiles = requirementMatcher.getTilesForItem(itemId, npcId);
+                if (matchingTiles.isEmpty()) {
+                    continue;
+                }
+                String warning = notSubmittedReason();
+
+                // One popup per drop, shown immediately when the item is obtained
+                showDropNotification(itemId, quantity, matchingTiles, warning);
+
+                if (warning != null) {
+                    continue;
+                }
 
                 for (UUID tileId : matchingTiles) {
                     // Check cooldown to avoid duplicate submissions
@@ -123,25 +139,10 @@ public class AutoSubmissionHandler {
                         log.debug("Tile {} is on submission cooldown, skipping", tileId);
                         continue;
                     }
-
-                    // Show notification immediately when item is obtained
-                    if (config.showAutoSubmitNotifications()) {
-                        String itemName = getItemName(itemId);
-                        showNotification("Bingo Item", String.format("Obtained %s - auto-submitting...", itemName));
-                    }
-
-                    // Submit this tile with full metadata
                     submitTileAutomaticWithMetadata(tileId, itemId, quantity, sourceName, npcId, sourceType);
                 }
             }
         }
-    }
-
-    /**
-     * Automatically submits a tile with a screenshot and metadata.
-     */
-    private void submitTileAutomatic(UUID tileId, int itemId, int quantity, String sourceName) {
-        submitTileAutomaticWithMetadata(tileId, itemId, quantity, sourceName, null, "Unknown");
     }
 
     /**
@@ -233,24 +234,13 @@ public class AutoSubmissionHandler {
     }
 
     /**
-     * Checks if events should be processed based on config and plugin state.
+     * Checks if loot events should be matched against tiles at all. This is independent of auto-submission:
+     * drops of bingo items are announced even when they are not submitted automatically.
      */
     private boolean shouldProcessEvent() {
-        // Check if auto-submission is enabled
-        if (!config.enableAutoSubmission()) {
-            log.debug("Auto-submission disabled in config");
-            return false;
-        }
-
         // Check if we have a current bingo loaded
         if (plugin.getCurrentBingo() == null) {
             log.debug("No current bingo loaded");
-            return false;
-        }
-
-        // The server rejects submissions for locked bingos; don't take screenshots for nothing
-        if (plugin.getCurrentBingo().isLocked()) {
-            log.debug("Current bingo is locked, skipping auto-submission");
             return false;
         }
 
@@ -265,29 +255,63 @@ public class AutoSubmissionHandler {
     }
 
     /**
-     * Shows a toast notification to the user.
+     * Returns why matching drops are not submitted automatically (shown on the popup), or null when they are.
      */
-    private void showNotification(String title, String message) {
-        if (!config.showAutoSubmitNotifications()) {
-            return;
+    private String notSubmittedReason() {
+        if (!config.enableAutoSubmission()) {
+            return "Not auto-submitted - submit manually";
         }
-
-        // Add toast notification if enabled
-        if (config.showToastNotifications()) {
-            // Convert Color to RGB int for notification
-            int color = config.notificationColor().getRGB() & 0xFFFFFF;
-            notificationManager.addNotification(title, message, color);
+        // The server rejects submissions for locked bingos; don't take screenshots for nothing
+        if (plugin.getCurrentBingo().isLocked()) {
+            return "Bingo is locked - not submitted";
         }
-
-        // Keep log for debugging
-        log.info("Auto-submission notification: {} - {}", title, message);
+        return null;
     }
 
     /**
-     * Shows a notification with default title.
+     * Shows the drop popup. Must run on the client thread (item prices and names).
      */
-    private void showNotification(String message) {
-        showNotification("BingoScape", message);
+    private void showDropNotification(int itemId, int quantity, List<UUID> tileIds, String warning) {
+        if (!config.showAutoSubmitNotifications() || !config.showToastNotifications()) {
+            return;
+        }
+
+        long stackValue = getItemPrice(itemId) * (long) quantity;
+        DropTier tier = DropTierResolver.resolve(stackValue, config.dropUncommonValue(), config.dropRareValue(),
+                config.dropEpicValue(), config.dropLegendaryValue());
+        String itemName = getItemName(itemId);
+
+        dropOverlay.enqueue(new DropNotification(itemId, itemName, quantity, stackValue, tier,
+                getTileTitle(tileIds.get(0)), tileIds.size() - 1, warning));
+        log.info("Bingo item drop: {} x{} ({} gp, {})", itemName, quantity, stackValue, tier);
+    }
+
+    private String getTileTitle(UUID tileId) {
+        if (plugin.getCurrentBingo() == null || plugin.getCurrentBingo().getTiles() == null) {
+            return null;
+        }
+        for (Tile tile : plugin.getCurrentBingo().getTiles()) {
+            if (tileId.equals(tile.getId())) {
+                return tile.getTitle();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * GE price of an item, falling back to the high alchemy value for untradeables.
+     */
+    private long getItemPrice(int itemId) {
+        try {
+            long price = plugin.getItemManager().getItemPrice(itemId);
+            if (price > 0) {
+                return price;
+            }
+            return Math.max(0, plugin.getItemManager().getItemComposition(itemId).getHaPrice());
+        } catch (Exception e) {
+            log.debug("Failed to get item price for ID {}", itemId, e);
+            return 0;
+        }
     }
 
     /**

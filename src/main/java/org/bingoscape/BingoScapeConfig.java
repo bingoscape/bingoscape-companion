@@ -8,8 +8,6 @@ import net.runelite.client.config.Keybind;
 import net.runelite.client.config.Range;
 import net.runelite.client.config.Units;
 
-import java.awt.Color;
-
 @ConfigGroup(BingoScapeConfig.CONFIG_GROUP)
 public interface BingoScapeConfig extends Config {
     String CONFIG_GROUP = "bingoscape";
@@ -68,7 +66,7 @@ public interface BingoScapeConfig extends Config {
         return false; // Off by default for safety
     }
 
-    @ConfigItem(keyName = "showAutoSubmitNotifications", name = "Show Auto-Submit Notifications", description = "Display notifications when tiles are automatically submitted")
+    @ConfigItem(keyName = "showAutoSubmitNotifications", name = "Show Auto-Submit Notifications", description = "Show the drop popup and chat messages for bingo items and automatic submissions")
     default boolean showAutoSubmitNotifications() {
         return true;
     }
@@ -115,16 +113,45 @@ public interface BingoScapeConfig extends Config {
         return true;
     }
 
-    @ConfigSection(name = "Notifications", description = "Toast notification settings", position = 10)
+    @ConfigSection(name = "Notifications", description = "Drop popup settings", position = 10)
     String notificationSection = "notifications";
 
-    @ConfigItem(keyName = "showToastNotifications", name = "Show Toast Notifications", description = "Display in-game toast notifications for bingo events", section = notificationSection)
+    @ConfigItem(keyName = "showToastNotifications", name = "Show Drop Popup", description = "Show a popup when you receive an item that counts for a bingo tile. The popup color depends on the GE value of the drop", section = notificationSection, position = 0)
     default boolean showToastNotifications() {
         return true;
     }
 
-    @ConfigItem(keyName = "notificationColor", name = "Notification Color", description = "Color of toast notifications (requires restart to take effect)", section = notificationSection)
-    default Color notificationColor() {
-        return new Color(255, 98, 0); // BingoScape orange
+    @Range(min = 50, max = 200)
+    @Units(Units.PERCENT)
+    @ConfigItem(keyName = "notificationScale", name = "Popup Scale", description = "Size of the drop popup", section = notificationSection, position = 1)
+    default int notificationScale() {
+        return 100;
+    }
+
+    @Range(min = 1, max = 15)
+    @Units(Units.SECONDS)
+    @ConfigItem(keyName = "notificationSeconds", name = "Popup Duration", description = "How long the drop popup stays on screen", section = notificationSection, position = 2)
+    default int notificationSeconds() {
+        return 5;
+    }
+
+    @ConfigItem(keyName = "dropUncommonValue", name = "Uncommon From", description = "Stack value (gp) from which a drop is Uncommon (green)", section = notificationSection, position = 3)
+    default int dropUncommonValue() {
+        return 100_000;
+    }
+
+    @ConfigItem(keyName = "dropRareValue", name = "Rare From", description = "Stack value (gp) from which a drop is Rare (blue)", section = notificationSection, position = 4)
+    default int dropRareValue() {
+        return 1_000_000;
+    }
+
+    @ConfigItem(keyName = "dropEpicValue", name = "Epic From", description = "Stack value (gp) from which a drop is Epic (purple)", section = notificationSection, position = 5)
+    default int dropEpicValue() {
+        return 10_000_000;
+    }
+
+    @ConfigItem(keyName = "dropLegendaryValue", name = "Legendary From", description = "Stack value (gp) from which a drop is Legendary (gold)", section = notificationSection, position = 6)
+    default int dropLegendaryValue() {
+        return 100_000_000;
     }
 }

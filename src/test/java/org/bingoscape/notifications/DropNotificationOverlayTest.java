@@ -1,0 +1,58 @@
+package org.bingoscape.notifications;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+public class DropNotificationOverlayTest {
+    private static final long HOLD = 5000;
+
+    @Test
+    public void alphaFadesInHoldsAndFadesOut() {
+        assertEquals(0f, DropNotificationOverlay.alpha(0, HOLD, false), 0.001f);
+        assertEquals(1f, DropNotificationOverlay.alpha(DropNotificationOverlay.SLIDE_MS, HOLD, false), 0.001f);
+        assertEquals(1f, DropNotificationOverlay.alpha(3000, HOLD, false), 0.001f);
+
+        long fadeStart = DropNotificationOverlay.SLIDE_MS + HOLD;
+        assertEquals(0.5f, DropNotificationOverlay.alpha(fadeStart + DropNotificationOverlay.FADE_MS / 2, HOLD, false), 0.001f);
+        assertEquals(0f, DropNotificationOverlay.alpha(fadeStart + DropNotificationOverlay.FADE_MS, HOLD, false), 0.001f);
+    }
+
+    @Test
+    public void queuedPopupsHoldShorter() {
+        long normal = DropNotificationOverlay.totalMs(HOLD, false);
+        long hurried = DropNotificationOverlay.totalMs(HOLD, true);
+        assertTrue(hurried < normal);
+        assertEquals(DropNotificationOverlay.SLIDE_MS + 3000 + DropNotificationOverlay.FADE_MS, hurried);
+    }
+
+    @Test
+    public void slideProgressIsMonotonicAndBounded() {
+        assertEquals(0f, DropNotificationOverlay.slideProgress(0), 0.001f);
+        assertEquals(1f, DropNotificationOverlay.slideProgress(DropNotificationOverlay.SLIDE_MS), 0.001f);
+        assertEquals(1f, DropNotificationOverlay.slideProgress(10_000), 0.001f);
+        float previous = 0;
+        for (long t = 0; t <= DropNotificationOverlay.SLIDE_MS; t += 25) {
+            float p = DropNotificationOverlay.slideProgress(t);
+            assertTrue(p >= previous);
+            previous = p;
+        }
+    }
+
+    @Test
+    public void layoutRowsDoNotOverlapAtAnyFontSize() {
+        for (int small = 10; small <= 32; small += 2) {
+            int big = small + 2;
+            DropNotificationOverlay.Layout plain = DropNotificationOverlay.Layout.of(small, big, 8, false);
+            assertTrue(plain.nameY >= plain.captionY + plain.pillHeight);
+            assertTrue(plain.statY >= plain.nameY + big);
+            assertTrue(plain.contentBottom >= plain.statY + small);
+            assertEquals(plain.contentBottom, plain.height);
+
+            DropNotificationOverlay.Layout warned = DropNotificationOverlay.Layout.of(small, big, 8, true);
+            assertEquals(plain.contentBottom, warned.warningY);
+            assertTrue(warned.height >= warned.warningY + small);
+        }
+    }
+}

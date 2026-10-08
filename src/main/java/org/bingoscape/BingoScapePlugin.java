@@ -119,7 +119,7 @@ public class BingoScapePlugin extends Plugin {
     private AutoSubmissionHandler autoSubmissionHandler;
 
     @Inject
-    private org.bingoscape.notifications.NotificationManager notificationManager;
+    private org.bingoscape.notifications.DropNotificationOverlay dropOverlay;
 
     @Getter
     @Inject
@@ -180,11 +180,11 @@ public class BingoScapePlugin extends Plugin {
         clientToolbar.addNavigation(navButton);
         overlayManager.add(codephraseOverlay);
         overlayManager.add(boardOverlay);
+        overlayManager.add(dropOverlay);
         mouseManager.registerMouseListener(boardInputListener);
         mouseManager.registerMouseWheelListener(boardInputListener);
         keyManager.registerKeyListener(boardInputListener);
         keyManager.registerKeyListener(boardHotkeyListener);
-        notificationManager.startUp();
 
         // Load all events and handle pinned bingo
         if (hasApiKey()) {
@@ -220,7 +220,8 @@ public class BingoScapePlugin extends Plugin {
 
     @Override
     protected void shutDown() {
-        notificationManager.shutDown();
+        dropOverlay.clear();
+        overlayManager.remove(dropOverlay);
         clientToolbar.removeNavigation(navButton);
         overlayManager.remove(codephraseOverlay);
         overlayManager.remove(boardOverlay);
@@ -259,6 +260,18 @@ public class BingoScapePlugin extends Plugin {
 
     @Subscribe
     public void onGameStateChanged(GameStateChanged gameStateChanged) {
+        switch (gameStateChanged.getGameState()) {
+            case HOPPING:
+            case LOGGING_IN:
+            case LOGIN_SCREEN:
+            case LOGIN_SCREEN_AUTHENTICATOR:
+            case CONNECTION_LOST:
+                dropOverlay.clear();
+                break;
+            default:
+                break;
+        }
+
         // Only update login state if transitioning to LOGGED_IN from a non-logged-in state
         if (gameStateChanged.getGameState() == GameState.LOGGED_IN && !isLoggedIn) {
             isLoggedIn = true;
