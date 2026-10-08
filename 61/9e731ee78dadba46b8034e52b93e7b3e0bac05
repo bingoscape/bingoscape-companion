@@ -1,0 +1,38 @@
+src/test/java/org/bingoscape/notifications/DropNotificationOverlayTest.java
+  s_1362b5d2167d6b::t_b0d3c02eb972b9 1-58
+src/main/java/org/bingoscape/notifications/DropTier.java
+  s_1362b5d2167d6b::t_7babee47659b0b 1-33
+src/test/java/org/bingoscape/notifications/DropTierResolverTest.java
+  s_1362b5d2167d6b::t_2791b0665749c7 1-51,54-56
+  s_1362b5d2167d6b::t_66c8e6ab34021e 52-53
+src/main/java/org/bingoscape/BingoScapeConfig.java
+  s_1362b5d2167d6b::t_8f579a939aea79 69,116,119,124-155
+src/main/java/org/bingoscape/services/AutoSubmissionHandler.java
+  s_1362b5d2167d6b::t_44e18323f89bbf 16-20,49,127-134,237-238,258,260-266,268-269,271-276,279-298,302,304-314
+  s_1362b5d2167d6b::t_2a049457402d6f 124-126
+src/main/java/org/bingoscape/notifications/DropNotification.java
+  s_1362b5d2167d6b::t_44e18323f89bbf 1-21
+src/main/java/org/bingoscape/notifications/DropNotificationOverlay.java
+  s_1362b5d2167d6b::t_e8e1f8b1e45386 40,51,56-61,85,90-95,103-106,110-111,118,121,124-157,161,164,178,180,194,198,200,202-203,208,214-218,222-227,229-232,234-237,239-241,246-247,276-287
+  s_1362b5d2167d6b::t_e55e0654a044c3 1-39,41-50,52-55,62-84,86-89,96-102,107-109,112-117,119-120,122-123,158-160,162-163,165-177,179,181-193,195-197,199,201,204-207,209-213,219-221,228,233,238,242-245,248-275,288-349
+src/main/java/org/bingoscape/notifications/DropTierResolver.java
+  s_1362b5d2167d6b::t_44e18323f89bbf 1-54
+src/main/java/org/bingoscape/BingoScapePlugin.java
+  s_1362b5d2167d6b::t_8f579a939aea79 122,183,223-224,263-274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "619e731ee78dadba46b8034e52b93e7b3e0bac05",
+  "prompts": {},
+  "sessions": {
+    "s_1362b5d2167d6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29f82a1c-fbcd-41d6-a9a5-a15fdf16b10d",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Sebastian Schubert <sschubert932@gmail.com>"
+    }
+  }
+}
