@@ -1,0 +1,147 @@
+src/main/java/org/bingoscape/board/BoardDraw.java
+  s_4038297d4cf4e8::t_61b3f8d26d4947 18-20,22-26
+  s_1362b5d2167d6b::t_f256e4a3023af9 68-92
+  s_4038297d4cf4e8::t_a981e400d3a1c1 3
+  s_4038297d4cf4e8::t_762fb5174c53ad 162
+  s_4038297d4cf4e8::t_491152131697c0 7
+  s_4038297d4cf4e8::t_a430a519a27050 1-2,4-6,8-17,21,27-34,37-40,42-67,93-147,149-161,163-164
+  s_4038297d4cf4e8::t_4b20eacfda69f2 35-36,41
+  s_4038297d4cf4e8::t_c22a2fc426dcda 148
+src/main/java/org/bingoscape/board/TileDetailsView.java
+  s_1362b5d2167d6b::t_e4dbc24d1381b8 156
+  s_1362b5d2167d6b::t_b3b198bfdaf088 171-198
+  s_4038297d4cf4e8::t_5782e144fd3e58 1-155,157-170,199-362
+src/main/java/org/bingoscape/BingoScapePanel.java
+  s_4038297d4cf4e8::t_3483a83cdb6f9f 39
+  s_4038297d4cf4e8::t_c79b6f6f02f64d 489-492
+  s_4038297d4cf4e8::t_c3ad4035bab61b 560,563
+  s_4038297d4cf4e8::t_6835d4659cf188 650-662
+  s_4038297d4cf4e8::t_b6f94e27bb4922 401-402,404-408,413-414
+  s_4038297d4cf4e8::t_34d8d38ad8af45 712-717
+  s_4038297d4cf4e8::t_0fd329e3fd26c0 285-292
+  s_4038297d4cf4e8::t_7538be86e2f446 5,11-32,34-38,40,45-47,49-52,55-56,58,64-78,90-93,97-100,102-107,109-110,112-116,119,121-124,126-129,131-133,135-139,141,144-147,149-152,154-156,158-163,166-169,171-173,175-176,178-182,185-197,199,201-205,207-208,213-234,238,245,247,249-250,252,254,257-258,260,263-266,269-277,279-281,293,297,299-300,302-316,329,339,348-354,357-358,363-400,403,409-412,415-426,428,430-436,438-447,451-452,454,456-459,462-470,472-482,485-488,493-494,496-499,501-511,513-517,519-534,536-537,539-554,556-557,559,561-562,564,566-569,571-605,609,611-649,663-676,679-683,688-711,718-752,764-767
+  s_4038297d4cf4e8::t_83da66207b7c27 57
+  s_4038297d4cf4e8::t_6e1046476dec28 43
+src/main/java/org/bingoscape/board/TileHoverCard.java
+  s_1362b5d2167d6b::t_49ff2a5a201765 1-130
+src/main/java/org/bingoscape/board/BoardModel.java
+  s_4038297d4cf4e8::t_b627bf20bced51 1-44
+src/main/java/org/bingoscape/board/ScreenshotPreviewDialog.java
+  s_4038297d4cf4e8::t_25dca2b5e6c51c 1-31,33-69
+  s_4038297d4cf4e8::t_79f0f574916cbd 32
+src/main/java/org/bingoscape/board/BoardLayout.java
+  s_4038297d4cf4e8::t_6b12cd6197ae44 1-142
+src/main/java/org/bingoscape/ui/components/ProgressBar.java
+  s_4038297d4cf4e8::t_f1a434d9a2dda6 1-57
+src/main/java/org/bingoscape/ui/BingoTheme.java
+  s_4038297d4cf4e8::t_049670b32108da 1-43
+src/main/java/org/bingoscape/ui/TileStatusStyle.java
+  s_4038297d4cf4e8::t_c9291ed390d6f4 1-153
+src/main/java/org/bingoscape/board/TextWrap.java
+  s_4038297d4cf4e8::t_1d8895b138aaba 91-92
+  s_4038297d4cf4e8::t_385955579b9634 16
+  s_4038297d4cf4e8::t_de40b78d36bd28 1-15,17-90,93-110
+src/main/java/org/bingoscape/models/ApiError.java
+  s_4038297d4cf4e8::t_0aa358a69ba364 1-35
+src/main/java/org/bingoscape/BingoBoardWindow.java
+  s_4038297d4cf4e8::t_76ca1f5bbc4917 380,385,390
+  s_4038297d4cf4e8::t_861e5b9232bb5b 688,692
+  s_4038297d4cf4e8::t_40515d10c861af 800-801,807
+  s_4038297d4cf4e8::t_a54066a531c4e1 6
+src/main/java/org/bingoscape/ui/components/FlatButton.java
+  s_4038297d4cf4e8::t_6964284626635d 1-78
+src/main/java/org/bingoscape/BoardDisplayMode.java
+  s_4038297d4cf4e8::t_6a2b18b4aecd68 1-20
+src/main/java/org/bingoscape/services/TileImageCache.java
+  s_4038297d4cf4e8::t_fe98f73f49de78 123
+  s_4038297d4cf4e8::t_0454231b642cfb 1-122,124-265
+src/main/java/org/bingoscape/board/BoardTooltipBuilder.java
+  s_4038297d4cf4e8::t_e9c220ae55d0b1 1-6,8-11,13-18,20-83,85-101
+  s_4038297d4cf4e8::t_93c3265805878b 7
+  s_4038297d4cf4e8::t_d5766815ea5391 19
+  s_4038297d4cf4e8::t_9190da4f282c43 84
+  s_4038297d4cf4e8::t_526fc59dda598f 12
+src/main/java/org/bingoscape/board/BoardState.java
+  s_4038297d4cf4e8::t_4301a1cb2de16f 15
+  s_4038297d4cf4e8::t_7904ba23a7ff1d 6
+  s_4038297d4cf4e8::t_11f7901d01b022 10
+  s_4038297d4cf4e8::t_31e78885aa89f5 1-5,7-9,11-14,16-40,44,46-47,58-106
+  s_4038297d4cf4e8::t_7acbefe78f6a47 41-43,45,48-57
+src/main/java/org/bingoscape/board/BoardInputListener.java
+  s_4038297d4cf4e8::t_472be5e19c0ef1 1-193,196-198
+  s_4038297d4cf4e8::t_9ec6636368b6c2 194-195
+src/main/java/org/bingoscape/board/HitMap.java
+  s_4038297d4cf4e8::t_e5239ec32989f6 5
+  s_4038297d4cf4e8::t_bbddd3efadae63 13-14,20-21
+  s_4038297d4cf4e8::t_dd7a7b6c72599b 1-4,6-12,15-19,22-32
+src/main/java/org/bingoscape/ui/components/Pill.java
+  s_4038297d4cf4e8::t_a533586ee20f94 1-46
+src/main/java/org/bingoscape/services/BingoScapeApiService.java
+  s_4038297d4cf4e8::t_6b23492a2da5e0 34,36,50,59,71,73,87,96,108,110,130,138-147,164,166,191,199-208,220,222,236,245
+src/main/java/org/bingoscape/ui/components/CardPanel.java
+  s_4038297d4cf4e8::t_5a0aaace6f4f65 1-46
+src/test/java/org/bingoscape/board/TextWrapTest.java
+  s_4038297d4cf4e8::t_ab4c888bf4282b 1-79
+src/test/java/org/bingoscape/ui/TileStatusStyleTest.java
+  s_4038297d4cf4e8::t_f69fc50c96567d 1-38
+src/main/java/org/bingoscape/services/AutoSubmissionHandler.java
+  s_4038297d4cf4e8::t_c65d75c3ab6489 251-256
+src/test/java/org/bingoscape/board/BoardLayoutTest.java
+  s_4038297d4cf4e8::t_8c812bb65c782e 1-98
+src/main/java/org/bingoscape/board/BingoBoardOverlay.java
+  s_4038297d4cf4e8::t_d5fc7e3ee1ee20 208
+  s_1362b5d2167d6b::t_235e8c0409dd90 402-405
+  s_4038297d4cf4e8::t_24c36e05f58410 124-132
+  s_4038297d4cf4e8::t_5a337ccafa62fb 199
+  s_4038297d4cf4e8::t_aea5d47fb9a762 157
+  s_4038297d4cf4e8::t_d21e2148ea1e89 375-376
+  s_4038297d4cf4e8::t_8a111f00f13a5e 66
+  s_4038297d4cf4e8::t_d9743b1b0974d7 1-65,67-123,133-156,158-198,200-207,209-374,377-401,406-412
+src/main/java/org/bingoscape/BingoScapeConfig.java
+  s_4038297d4cf4e8::t_0d0c8f3077627d 7-9
+  s_4038297d4cf4e8::t_c8e45f52f5e44f 76-117
+  s_4038297d4cf4e8::t_5d2fc250a77151 13,15-16
+src/test/java/org/bingoscape/board/BoardModelAndTooltipTest.java
+  s_4038297d4cf4e8::t_565f34e2a19201 1-92
+src/main/java/org/bingoscape/BingoScapePlugin.java
+  s_4038297d4cf4e8::t_78c0bc766cf144 342-344,346-370,372
+  s_4038297d4cf4e8::t_0057987431c005 517
+  s_4038297d4cf4e8::t_d2826189842180 56
+  s_4038297d4cf4e8::t_08442b0c564dab 128-145,149,151-158,161,163,345,575-576
+  s_4038297d4cf4e8::t_ecc5486308dce0 391-393,396,409-431
+  s_4038297d4cf4e8::t_d1fdf70cb39208 394-395,397
+  s_4038297d4cf4e8::t_d2b1635fad8143 285
+  s_4038297d4cf4e8::t_491e89989df7a7 579-582
+  s_4038297d4cf4e8::t_db8f6f958db8e6 226-231,233-238,240-257
+  s_4038297d4cf4e8::t_1bcf5dbf2fb8f6 25-32,34
+  s_4038297d4cf4e8::t_bd45bb3c294424 461-463
+  s_4038297d4cf4e8::t_6a43cb143f59b0 232
+  s_4038297d4cf4e8::t_fb70ebe4ba7b64 484-486
+  s_4038297d4cf4e8::t_3a636f57d3d088 182-186
+  s_4038297d4cf4e8::t_aea485f4bfa83a 494-500,502-504,510-516,518-521,525-574
+  s_4038297d4cf4e8::t_8a8e7f38545405 239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d9123b5493382b88a766921c27605f760abcb157",
+  "prompts": {},
+  "sessions": {
+    "s_1362b5d2167d6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29f82a1c-fbcd-41d6-a9a5-a15fdf16b10d",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Sebastian Schubert <sschubert932@gmail.com>"
+    },
+    "s_4038297d4cf4e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd91214a-0b86-4d24-81f9-e6c8aa08d515",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Sebastian Schubert <sschubert932@gmail.com>"
+    }
+  }
+}
