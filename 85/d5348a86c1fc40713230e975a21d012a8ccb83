@@ -1,0 +1,19 @@
+README.md
+  s_1362b5d2167d6b::t_d7ff24368b637a 70-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "85d5348a86c1fc40713230e975a21d012a8ccb83",
+  "prompts": {},
+  "sessions": {
+    "s_1362b5d2167d6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29f82a1c-fbcd-41d6-a9a5-a15fdf16b10d",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Sebastian Schubert <sschubert932@gmail.com>"
+    }
+  }
+}
