@@ -67,6 +67,13 @@ BingoScape allows you to:
 
 Visit [next.bingoscape.org](https://next.bingoscape.org) to set up your own bingo events.
 
+## Acknowledgments
+
+Parts of this plugin were inspired by other RuneLite plugins:
+
+- [OSRS TCG](https://github.com/Azderi/osrs-tcg) in-game overlay
+- [Collection Log Popup Enhanced](https://github.com/TimHeessels/collection-log-popup-enhanced) drop popup
+
 ## Support
 
 For issues or feature requests, please open an issue on the GitHub repository.
