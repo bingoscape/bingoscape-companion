@@ -3,6 +3,7 @@ package org.bingoscape;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import org.bingoscape.models.*;
+import org.bingoscape.ui.TileStatusStyle;
 
 import javax.swing.*;
 import javax.swing.border.CompoundBorder;
@@ -376,58 +377,17 @@ public class BingoBoardWindow extends JFrame {
 
     // Get background color based on submission status
     private Color getTileBackgroundColor(TileSubmission submission) {
-        if (submission == null || submission.getStatus() == null ||
-                submission.getStatus() == TileSubmissionType.NOT_SUBMITTED) {
-            return ColorScheme.DARK_GRAY_COLOR;
-        }
-
-        switch (submission.getStatus()) {
-            case PENDING:
-                return new Color(30, 64, 122); // Darker blue
-            case ACCEPTED:
-                return new Color(17, 99, 47);  // Darker green
-            case REQUIRES_INTERACTION:
-                return new Color(117, 89, 4);  // Darker yellow/gold
-            case DECLINED:
-                return new Color(120, 34, 34); // Darker red
-            default:
-                return ColorScheme.DARK_GRAY_COLOR;
-        }
+        return TileStatusStyle.background(submission == null ? null : submission.getStatus());
     }
 
     // Get border color based on submission status
     private Color getTileBorderColor(TileSubmission submission) {
-        if (submission == null || submission.getStatus() == null)
-            return ColorScheme.BORDER_COLOR;
-
-        switch (submission.getStatus()) {
-            case PENDING:
-                return new Color(59, 130, 246); // Blue
-            case ACCEPTED:
-                return new Color(34, 197, 94);  // Green
-            case REQUIRES_INTERACTION:
-                return new Color(234, 179, 8);  // Yellow
-            case DECLINED:
-                return new Color(239, 68, 68);  // Red
-            default:
-                return ColorScheme.BORDER_COLOR;
-        }
+        return TileStatusStyle.border(submission == null ? null : submission.getStatus());
     }
 
     // Get hex color for tooltip based on submission status
     private String getStatusHexColor(TileSubmissionType status) {
-        switch (status) {
-            case PENDING:
-                return "#3b82f6"; // Blue
-            case ACCEPTED:
-                return "#22c55e"; // Green
-            case REQUIRES_INTERACTION:
-                return "#eab308"; // Yellow
-            case DECLINED:
-                return "#ef4444"; // Red
-            default:
-                return "#ffffff"; // White
-        }
+        return TileStatusStyle.hex(status);
     }
 
     private void addStatusOverlay(JPanel panel, TileSubmission submission) {
@@ -725,23 +685,11 @@ public class BingoBoardWindow extends JFrame {
     }
 
     private String getStatusText(TileSubmissionType status) {
-        switch (status) {
-            case PENDING: return "Pending Review";
-            case ACCEPTED: return "Completed";
-            case REQUIRES_INTERACTION: return "Needs Action";
-            case DECLINED: return "Declined";
-            default: return "Not Submitted";
-        }
+        return TileStatusStyle.displayText(status);
     }
 
     private Color getStatusColor(TileSubmissionType status) {
-        switch (status) {
-            case PENDING: return new Color(59, 130, 246);
-            case ACCEPTED: return new Color(34, 197, 94);
-            case REQUIRES_INTERACTION: return new Color(234, 179, 8);
-            case DECLINED: return new Color(239, 68, 68);
-            default: return Color.LIGHT_GRAY;
-        }
+        return TileStatusStyle.accent(status);
     }
 
     private JPanel createTileImagePanel(Tile tile) {
@@ -849,13 +797,14 @@ public class BingoBoardWindow extends JFrame {
     }
 
     private void takeScreenshotAndShowPreview(Tile tile) {
-        plugin.takeScreenshot(tile.getId(), (screenshotBytes) -> {
+        // The screenshot callback runs on a worker thread; dialogs must be created on the EDT
+        plugin.takeScreenshot(tile.getId(), (screenshotBytes) -> SwingUtilities.invokeLater(() -> {
             if (screenshotBytes != null) {
                 showScreenshotPreviewDialog(tile, screenshotBytes);
             } else {
                 JOptionPane.showMessageDialog(this, "Failed to take screenshot.", "Error", JOptionPane.ERROR_MESSAGE);
             }
-        });
+        }));
     }
 
     private void showScreenshotPreviewDialog(Tile tile, byte[] screenshotBytes) {

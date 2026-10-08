@@ -31,9 +31,9 @@ public class BingoScapeApiService {
         this.config = config;
     }
 
-    public void fetchActiveEvents(Consumer<List<EventData>> onSuccess, Consumer<String> onError) {
+    public void fetchActiveEvents(Consumer<List<EventData>> onSuccess, Consumer<ApiError> onError) {
         if (!hasApiKey()) {
-            onError.accept("No API key configured");
+            onError.accept(new ApiError(ApiError.NO_RESPONSE, "No API key configured"));
             return;
         }
 
@@ -47,7 +47,7 @@ public class BingoScapeApiService {
             @Override
             public void onFailure(Call call, IOException e) {
                 log.error("Failed to fetch events", e);
-                onError.accept("Failed to fetch events: " + e.getMessage());
+                onError.accept(new ApiError(ApiError.NO_RESPONSE, "Failed to fetch events: " + e.getMessage()));
             }
 
             @Override
@@ -56,7 +56,7 @@ public class BingoScapeApiService {
                     if (!response.isSuccessful() || responseBody == null) {
                         String error = "Unsuccessful response: " + response;
                         log.error(error);
-                        onError.accept(error);
+                        onError.accept(new ApiError(response.code(), error));
                         return;
                     }
 
@@ -68,9 +68,9 @@ public class BingoScapeApiService {
         });
     }
 
-    public void refreshBingoBoard(UUID bingoId, Consumer<Bingo> onSuccess, Consumer<String> onError) {
+    public void refreshBingoBoard(UUID bingoId, Consumer<Bingo> onSuccess, Consumer<ApiError> onError) {
         if (!hasApiKey()) {
-            onError.accept("No API key configured");
+            onError.accept(new ApiError(ApiError.NO_RESPONSE, "No API key configured"));
             return;
         }
 
@@ -84,7 +84,7 @@ public class BingoScapeApiService {
             @Override
             public void onFailure(Call call, IOException e) {
                 log.error("Failed to refresh bingo board", e);
-                onError.accept("Failed to refresh bingo board: " + e.getMessage());
+                onError.accept(new ApiError(ApiError.NO_RESPONSE, "Failed to refresh bingo board: " + e.getMessage()));
             }
 
             @Override
@@ -93,7 +93,7 @@ public class BingoScapeApiService {
                     if (!response.isSuccessful() || responseBody == null) {
                         String error = "Unsuccessful response when refreshing bingo: " + response;
                         log.error(error);
-                        onError.accept(error);
+                        onError.accept(new ApiError(response.code(), error));
                         return;
                     }
 
@@ -105,9 +105,9 @@ public class BingoScapeApiService {
         });
     }
 
-    public void submitTileCompletion(UUID tileId, byte[] screenshotBytes, Consumer<Bingo> onSuccess, Consumer<String> onError) {
+    public void submitTileCompletion(UUID tileId, byte[] screenshotBytes, Consumer<Bingo> onSuccess, Consumer<ApiError> onError) {
         if (!hasApiKey()) {
-            onError.accept("No API key configured");
+            onError.accept(new ApiError(ApiError.NO_RESPONSE, "No API key configured"));
             return;
         }
 
@@ -127,7 +127,7 @@ public class BingoScapeApiService {
             @Override
             public void onFailure(Call call, IOException e) {
                 log.error("Failed to submit tile completion", e);
-                onError.accept("Failed to submit tile completion: " + e.getMessage());
+                onError.accept(new ApiError(ApiError.NO_RESPONSE, "Failed to submit tile completion: " + e.getMessage()));
             }
 
             @Override
@@ -135,10 +135,16 @@ public class BingoScapeApiService {
                 try (ResponseBody responseBody = response.body()) {
                     String stringBody = responseBody.string();
                     if (!response.isSuccessful()) {
-                        ErrorResponse errorResponse = gson.fromJson(stringBody, ErrorResponse.class);
-                        String error = errorResponse.getError();
-                        log.error("Unsuccessful submission response: {}", error);
-                        onError.accept(error);
+                        try {
+                            ErrorResponse errorResponse = gson.fromJson(stringBody, ErrorResponse.class);
+                            String error = errorResponse.getError();
+                            log.error("Unsuccessful submission response: {}", error);
+                            onError.accept(new ApiError(response.code(), error));
+                        } catch (com.google.gson.JsonSyntaxException e) {
+                            String error = "HTTP " + response.code() + " Error (Response is not JSON). Raw response: " + stringBody;
+                            log.error("Unsuccessful submission response: {}", error);
+                            onError.accept(new ApiError(response.code(), error));
+                        }
                         return;
                     }
 
@@ -155,9 +161,9 @@ public class BingoScapeApiService {
      * and approve submissions based on the provided metadata.
      */
     public void submitTileAutomatic(UUID tileId, byte[] screenshotBytes, AutoSubmissionMetadata metadata,
-                                     Consumer<Bingo> onSuccess, Consumer<String> onError) {
+                                     Consumer<Bingo> onSuccess, Consumer<ApiError> onError) {
         if (!hasApiKey()) {
-            onError.accept("No API key configured");
+            onError.accept(new ApiError(ApiError.NO_RESPONSE, "No API key configured"));
             return;
         }
 
@@ -182,7 +188,7 @@ public class BingoScapeApiService {
             @Override
             public void onFailure(Call call, IOException e) {
                 log.error("Failed to submit automatic tile completion", e);
-                onError.accept("Failed to submit automatic tile completion: " + e.getMessage());
+                onError.accept(new ApiError(ApiError.NO_RESPONSE, "Failed to submit automatic tile completion: " + e.getMessage()));
             }
 
             @Override
@@ -190,10 +196,16 @@ public class BingoScapeApiService {
                 try (ResponseBody responseBody = response.body()) {
                     String stringBody = responseBody.string();
                     if (!response.isSuccessful()) {
-                        ErrorResponse errorResponse = gson.fromJson(stringBody, ErrorResponse.class);
-                        String error = errorResponse.getError();
-                        log.error("Unsuccessful auto-submission response: {}", error);
-                        onError.accept(error);
+                        try {
+                            ErrorResponse errorResponse = gson.fromJson(stringBody, ErrorResponse.class);
+                            String error = errorResponse.getError();
+                            log.error("Unsuccessful auto-submission response: {}", error);
+                            onError.accept(new ApiError(response.code(), error));
+                        } catch (com.google.gson.JsonSyntaxException e) {
+                            String error = "HTTP " + response.code() + " Error (Response is not JSON). Raw response: " + stringBody;
+                            log.error("Unsuccessful auto-submission response: {}", error);
+                            onError.accept(new ApiError(response.code(), error));
+                        }
                         return;
                     }
 
@@ -205,9 +217,9 @@ public class BingoScapeApiService {
         });
     }
 
-    public void fetchEvents(Consumer<List<EventData>> onSuccess, Consumer<String> onError) {
+    public void fetchEvents(Consumer<List<EventData>> onSuccess, Consumer<ApiError> onError) {
         if (!hasApiKey()) {
-            onError.accept("No API key configured");
+            onError.accept(new ApiError(ApiError.NO_RESPONSE, "No API key configured"));
             return;
         }
 
@@ -221,7 +233,7 @@ public class BingoScapeApiService {
             @Override
             public void onFailure(Call call, IOException e) {
                 log.error("Failed to fetch events", e);
-                onError.accept("Failed to fetch events: " + e.getMessage());
+                onError.accept(new ApiError(ApiError.NO_RESPONSE, "Failed to fetch events: " + e.getMessage()));
             }
 
             @Override
@@ -230,7 +242,7 @@ public class BingoScapeApiService {
                     if (!response.isSuccessful() || responseBody == null) {
                         String error = "Unsuccessful response when fetching events: " + response;
                         log.error(error);
-                        onError.accept(error);
+                        onError.accept(new ApiError(response.code(), error));
                         return;
                     }
 

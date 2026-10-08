@@ -4,11 +4,16 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
+import net.runelite.client.config.Keybind;
+import net.runelite.client.config.Range;
+import net.runelite.client.config.Units;
 
 import java.awt.Color;
 
-@ConfigGroup("bingoscape")
+@ConfigGroup(BingoScapeConfig.CONFIG_GROUP)
 public interface BingoScapeConfig extends Config {
+    String CONFIG_GROUP = "bingoscape";
+
     @ConfigItem(keyName = "apiKey", name = "API Key", description = "Your BingoScape API key", secret = true)
     default String apiKey() {
         return "";
@@ -65,6 +70,48 @@ public interface BingoScapeConfig extends Config {
 
     @ConfigItem(keyName = "showAutoSubmitNotifications", name = "Show Auto-Submit Notifications", description = "Display notifications when tiles are automatically submitted")
     default boolean showAutoSubmitNotifications() {
+        return true;
+    }
+
+    @ConfigSection(name = "Bingo Board", description = "In-game bingo board overlay", position = 5)
+    String boardSection = "boardSection";
+
+    @ConfigItem(keyName = "boardDisplayMode", name = "Board Display", description = "Show the bingo board as an in-game overlay or as a separate window (legacy)", section = boardSection, position = 0)
+    default BoardDisplayMode boardDisplayMode() {
+        return BoardDisplayMode.OVERLAY;
+    }
+
+    @ConfigItem(keyName = "boardToggleHotkey", name = "Toggle Board Hotkey", description = "Hotkey to show/hide the bingo board", section = boardSection, position = 1)
+    default Keybind boardToggleHotkey() {
+        return Keybind.NOT_SET;
+    }
+
+    @Range(min = 50, max = 200)
+    @Units(Units.PERCENT)
+    @ConfigItem(keyName = "boardScale", name = "Board Scale", description = "Tile size of the board overlay (shrinks automatically to fit the game view). Ctrl + mouse wheel over the board also changes this.", section = boardSection, position = 2)
+    default int boardScale() {
+        return 100;
+    }
+
+    @Range(min = 20, max = 100)
+    @Units(Units.PERCENT)
+    @ConfigItem(keyName = "boardOpacity", name = "Background Opacity", description = "Opacity of the board overlay background", section = boardSection, position = 3)
+    default int boardOpacity() {
+        return 90;
+    }
+
+    @ConfigItem(keyName = "boardShowTooltips", name = "Show Tile Tooltips", description = "Show tile details when hovering a tile", section = boardSection, position = 4)
+    default boolean boardShowTooltips() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "boardShowTileImages", name = "Show Tile Images", description = "Download and show tile header images", section = boardSection, position = 5)
+    default boolean boardShowTileImages() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "boardCloseOnEscape", name = "Close With Escape", description = "Pressing Escape closes the tile details, then the board overlay", section = boardSection, position = 6)
+    default boolean boardCloseOnEscape() {
         return true;
     }
 

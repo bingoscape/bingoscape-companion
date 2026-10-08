@@ -22,7 +22,16 @@ import net.runelite.client.util.ImageUtil;
 import net.runelite.client.task.Schedule;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.input.KeyManager;
+import net.runelite.client.input.MouseManager;
+import net.runelite.client.util.HotkeyListener;
+import org.bingoscape.board.BingoBoardOverlay;
+import org.bingoscape.board.BoardInputListener;
+import org.bingoscape.board.BoardState;
+import org.bingoscape.board.ScreenshotPreviewDialog;
 import org.bingoscape.services.BingoScapeApiService;
+import org.bingoscape.services.TileImageCache;
 
 import java.time.temporal.ChronoUnit;
 import java.awt.image.BufferedImage;
@@ -44,6 +53,7 @@ import org.bingoscape.services.TileRequirementMatcher;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.plugins.loottracker.LootReceived;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -63,7 +73,6 @@ public class BingoScapePlugin extends Plugin {
     private static final String ICON_PATH = "/sidepanel_icon.png";
     private static final String PNG_FORMAT = "png";
     private static final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/png");
-    private static final String HTTP_STATUS_LOCKED = "423";
 
     // Injected components
     @Inject
@@ -116,16 +125,42 @@ public class BingoScapePlugin extends Plugin {
     @Inject
     private net.runelite.client.game.ItemManager itemManager;
 
+    @Inject
+    private MouseManager mouseManager;
+
+    @Inject
+    private KeyManager keyManager;
+
+    @Inject
+    private BingoBoardOverlay boardOverlay;
+
+    @Inject
+    private BoardInputListener boardInputListener;
+
+    @Inject
+    private BoardState boardState;
+
+    @Inject
+    private TileImageCache tileImageCache;
+
     // Plugin components
     private NavigationButton navButton;
     private BingoScapePanel panel;
+    private JDialog screenshotPreviewDialog;
 
-    // State
+    private final HotkeyListener boardHotkeyListener = new HotkeyListener(() -> config.boardToggleHotkey()) {
+        @Override
+        public void hotkeyPressed() {
+            toggleBoard();
+        }
+    };
+
+    // State (written from HTTP callback threads, read by overlays on the client thread)
     private final List<EventData> activeEvents = new CopyOnWriteArrayList<>();
     @Getter
-    private EventData currentEvent;
+    private volatile EventData currentEvent;
     @Getter
-    private Bingo currentBingo;
+    private volatile Bingo currentBingo;
     private boolean isLoggedIn;
 
     @Override
@@ -144,6 +179,11 @@ public class BingoScapePlugin extends Plugin {
 
         clientToolbar.addNavigation(navButton);
         overlayManager.add(codephraseOverlay);
+        overlayManager.add(boardOverlay);
+        mouseManager.registerMouseListener(boardInputListener);
+        mouseManager.registerMouseWheelListener(boardInputListener);
+        keyManager.registerKeyListener(boardInputListener);
+        keyManager.registerKeyListener(boardHotkeyListener);
         notificationManager.startUp();
 
         // Load all events and handle pinned bingo
@@ -183,6 +223,38 @@ public class BingoScapePlugin extends Plugin {
         notificationManager.shutDown();
         clientToolbar.removeNavigation(navButton);
         overlayManager.remove(codephraseOverlay);
+        overlayManager.remove(boardOverlay);
+        mouseManager.unregisterMouseListener(boardInputListener);
+        mouseManager.unregisterMouseWheelListener(boardInputListener);
+        keyManager.unregisterKeyListener(boardInputListener);
+        keyManager.unregisterKeyListener(boardHotkeyListener);
+        boardState.hide();
+        boardState.resetCaptures();
+        tileImageCache.clear();
+
+        BingoScapePanel closingPanel = panel;
+        JDialog closingDialog = screenshotPreviewDialog;
+        screenshotPreviewDialog = null;
+        SwingUtilities.invokeLater(() -> {
+            closingPanel.shutdown();
+            if (closingDialog != null) {
+                closingDialog.dispose();
+            }
+        });
+    }
+
+    @Subscribe
+    public void onConfigChanged(ConfigChanged event) {
+        if (!BingoScapeConfig.CONFIG_GROUP.equals(event.getGroup()) || !"boardDisplayMode".equals(event.getKey())) {
+            return;
+        }
+
+        // Close whichever board view no longer matches the selected mode
+        if (config.boardDisplayMode() == BoardDisplayMode.WINDOW) {
+            hideBoard();
+        } else {
+            SwingUtilities.invokeLater(panel::disposeBoardWindow);
+        }
     }
 
     @Subscribe
@@ -210,7 +282,7 @@ public class BingoScapePlugin extends Plugin {
                 sortEvents(activeEvents);
                 panel.updateEventsList(activeEvents);
             },
-            error -> showErrorMessage(error)
+            error -> showErrorMessage(error.getMessage())
         );
     }
 
@@ -267,11 +339,37 @@ public class BingoScapePlugin extends Plugin {
         currentEvent = eventData;
         panel.updateEventDetails(eventData);
 
-        if (eventData.getBingos() != null && !eventData.getBingos().isEmpty()) {
-            // Default to first bingo or current one if it exists
-            selectBingo(currentBingo == null ?
-                    eventData.getBingos().get(0) : currentBingo);
+        Bingo bingo = pickBingo(eventData);
+        if (bingo != null) {
+            selectBingo(bingo);
         }
+    }
+
+    /**
+     * The bingo to show for an event: the pinned one, else the current one if it belongs to the event,
+     * else the first. The panel uses the same rule, so both agree regardless of which thread runs first.
+     */
+    public Bingo pickBingo(EventData eventData) {
+        List<Bingo> bingos = eventData.getBingos() == null ? List.of() : new ArrayList<>(eventData.getBingos());
+        if (bingos.isEmpty()) {
+            return null;
+        }
+
+        String pinnedId = config.pinnedBingoId();
+        Bingo current = currentBingo;
+        for (Bingo bingo : bingos) {
+            if (bingo.getId().toString().equals(pinnedId)) {
+                return bingo;
+            }
+        }
+        if (current != null) {
+            for (Bingo bingo : bingos) {
+                if (bingo.getId().equals(current.getId())) {
+                    return bingo;
+                }
+            }
+        }
+        return bingos.get(0);
     }
 
     public void selectBingo(Bingo bingo) {
@@ -290,7 +388,13 @@ public class BingoScapePlugin extends Plugin {
     }
 
     public void takeScreenshot(UUID tileId, Consumer<byte[]> callback) {
-        drawManager.requestNextFrameListener(image -> {
+        // Unlike the old window, the board overlay is drawn into the game frame; keep it out of the capture.
+        // The frame listener is registered from the client thread so it fires for a frame drawn after
+        // the suppression flag is set.
+        // A counter rather than a flag, so overlapping captures (auto + manual) all exclude the board.
+        boardState.beginCapture();
+        clientThread.invokeLater(() -> drawManager.requestNextFrameListener(image -> {
+            boardState.endCapture();
             executor.submit(() -> {
                 try {
                     BufferedImage screenshot = convertToBufferedImage(image);
@@ -302,7 +406,29 @@ public class BingoScapePlugin extends Plugin {
                     callback.accept(null);
                 }
             });
-        });
+        }));
+    }
+
+    /**
+     * Manual submission from the board overlay: capture, let the user confirm in a preview dialog, then submit.
+     */
+    public void captureAndPreviewSubmission(Tile tile) {
+        takeScreenshot(tile.getId(), screenshotBytes -> SwingUtilities.invokeLater(() -> {
+            // takeScreenshot already reported the failure in chat
+            if (screenshotBytes == null) {
+                return;
+            }
+
+            if (screenshotPreviewDialog != null) {
+                screenshotPreviewDialog.dispose();
+            }
+            screenshotPreviewDialog = ScreenshotPreviewDialog.create(
+                    SwingUtilities.getWindowAncestor(client.getCanvas()),
+                    tile,
+                    screenshotBytes,
+                    bytes -> submitTileCompletionWithScreenshot(tile.getId(), bytes));
+            screenshotPreviewDialog.setVisible(true);
+        }));
     }
 
     private BufferedImage convertToBufferedImage(Image image) {
@@ -332,8 +458,9 @@ public class BingoScapePlugin extends Plugin {
                 updateCurrentBingoAndPanel(updatedBingo);
             },
             error -> {
-                showErrorMessage(error);
-                if (error.contains(HTTP_STATUS_LOCKED)) { // 423 Locked
+                showErrorMessage(error.getMessage());
+                if (error.isLocked()) {
+                    // Our copy of the bingo is stale; reload so the board shows it as locked
                     refreshBingoBoard();
                 }
             }
@@ -354,8 +481,9 @@ public class BingoScapePlugin extends Plugin {
                 updateCurrentBingoAndPanel(updatedBingo);
             },
             error -> {
-                log.error("Auto-submission failed: {}", error);
-                if (error.contains(HTTP_STATUS_LOCKED)) { // HTTP 423 Locked
+                log.error("Auto-submission failed (HTTP {}): {}", error.getStatusCode(), error.getMessage());
+                if (error.isLocked()) {
+                    // Reloading marks the bingo locked locally, which stops further auto-submission attempts
                     refreshBingoBoard();
                 }
             }
@@ -363,20 +491,95 @@ public class BingoScapePlugin extends Plugin {
     }
 
     public void refreshBingoBoard() {
+        refreshBingoBoard(null);
+    }
+
+    /**
+     * Reloads the current bingo; {@code onDone} runs after success or failure (on an HTTP callback thread).
+     */
+    public void refreshBingoBoard(Runnable onDone) {
         if (currentBingo == null || !hasApiKey()) {
+            if (onDone != null) {
+                onDone.run();
+            }
             return;
         }
 
         apiService.refreshBingoBoard(
             currentBingo.getId(),
-            this::updateCurrentBingoAndPanel,
-            error -> log.error(error)
+            bingo -> {
+                updateCurrentBingoAndPanel(bingo);
+                if (onDone != null) {
+                    onDone.run();
+                }
+            },
+            error -> {
+                log.error("Failed to refresh bingo board (HTTP {}): {}", error.getStatusCode(), error.getMessage());
+                if (onDone != null) {
+                    onDone.run();
+                }
+            }
         );
+    }
+
+    public boolean isBoardVisible() {
+        return boardState.isVisible();
+    }
+
+    public void toggleBoard() {
+        if (config.boardDisplayMode() == BoardDisplayMode.OVERLAY && boardState.isVisible()) {
+            hideBoard();
+        } else {
+            showBoard();
+        }
+    }
+
+    public void showBoard() {
+        Bingo bingo = currentBingo;
+        if (bingo == null) {
+            showErrorMessage("Select a bingo board first.");
+            return;
+        }
+
+        if (config.boardDisplayMode() == BoardDisplayMode.WINDOW) {
+            panel.openBoardWindow(bingo);
+            return;
+        }
+
+        boardState.show();
+        panel.setBoardButtonState(true);
+    }
+
+    public void hideBoard() {
+        boardState.hide();
+        panel.setBoardButtonState(false);
+    }
+
+    public void reloadBoard() {
+        boardState.startReload();
+        refreshBingoBoard(boardState::finishReload);
+    }
+
+    public void toggleBoardPin() {
+        Bingo bingo = currentBingo;
+        if (bingo == null) {
+            return;
+        }
+
+        if (bingo.getId().toString().equals(config.pinnedBingoId())) {
+            unpinBingo();
+        } else {
+            pinBingo(bingo.getId());
+        }
+        panel.refreshPinState();
     }
 
     private void updateCurrentBingoAndPanel(Bingo updatedBingo) {
         for(EventData e : activeEvents) {
-            e.getBingos().replaceAll(b -> b.getId().equals(updatedBingo.getId()) ? updatedBingo : b);
+            // Swap in a new list instead of mutating: the panel iterates these lists on the EDT
+            List<Bingo> bingos = new ArrayList<>(e.getBingos());
+            bingos.replaceAll(b -> b.getId().equals(updatedBingo.getId()) ? updatedBingo : b);
+            e.setBingos(bingos);
         }
         currentBingo = updatedBingo;
         panel.displayBingoBoard(updatedBingo);

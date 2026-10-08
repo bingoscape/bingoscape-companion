@@ -1,52 +1,81 @@
 package org.bingoscape;
 
-import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
+import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.ImageUtil;
 import org.bingoscape.models.Bingo;
 import org.bingoscape.models.EventData;
 import org.bingoscape.models.Role;
 import org.bingoscape.models.TeamMember;
+import org.bingoscape.models.Tile;
+import org.bingoscape.models.TileSubmissionType;
+import org.bingoscape.ui.BingoTheme;
+import org.bingoscape.ui.TileStatusStyle;
+import org.bingoscape.ui.components.CardPanel;
+import org.bingoscape.ui.components.FlatButton;
+import org.bingoscape.ui.components.Pill;
+import org.bingoscape.ui.components.ProgressBar;
 
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.CompoundBorder;
-import javax.swing.border.MatteBorder;
-
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.Executors;
-import javax.swing.DefaultListCellRenderer;
-import java.awt.event.ActionListener;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.ImageIcon;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JPanel;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import javax.swing.border.EmptyBorder;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridLayout;
+import java.awt.image.BufferedImage;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
+/**
+ * Side panel: event and board selection, event details and a board progress summary.
+ * Styled to match the in-game board overlay (rounded cards, RuneScape fonts, status colors).
+ */
 public class BingoScapePanel extends PluginPanel {
-    // Constants
     private static final int BORDER_SPACING = 10;
-    private static final int COMPONENT_SPACING = 10;
+    private static final int GAP = 6;
+    private static final int TEXT_WIDTH = PluginPanel.PANEL_WIDTH - 2 * BORDER_SPACING - 24;
+    private static final int TITLE_WITH_PILL_WIDTH = TEXT_WIDTH - 70;
+    private static final int RELOAD_FALLBACK_MS = 10_000;
     private static final String NO_EVENTS_TEXT = "No active events found";
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy");
 
-    // Components
-    private final JPanel mainContentPanel = new JPanel(); // Main container for all content
-    private final JPanel eventsPanel = new JPanel();
-    private final JPanel bingoPanel = new JPanel();
-    private final JPanel eventDetailsPanel = new JPanel();
-    private final JComboBox<EventData> eventSelector = new JComboBox<>();
-    private final JComboBox<Bingo> bingoSelector = new JComboBox<>();
-    private final JButton showBingoBoardButton;
-    private final JButton reloadEventsButton; // New reload events button
-    private final JLabel loadingLabel; // New loading label
-    private final Timer fadeTimer; // Timer for smooth transitions
-
-    // Reference to plugin and other resources
     private final BingoScapePlugin plugin;
     private final ScheduledExecutorService executor;
+
+    private final JComboBox<EventData> eventSelector = new JComboBox<>();
+    private final JComboBox<Bingo> bingoSelector = new JComboBox<>();
+    private final FlatButton reloadEventsButton;
+    private final JLabel loadingLabel = new JLabel("Loading...");
+    private final JLabel noEventsLabel = new JLabel(NO_EVENTS_TEXT);
+    private final CardPanel eventCard = new CardPanel();
+    private final JPanel boardSection = new JPanel();
+    private final CardPanel boardCard = new CardPanel();
+    private final FlatButton showBingoBoardButton = new FlatButton("Show Bingo Board");
+    private final FlatButton pinButton = new FlatButton("Pin");
+    private final FlatButton reloadBoardButton = new FlatButton("Reload");
+
+    // Set while the bingo selector is repopulated, so programmatic changes don't re-select bingos
+    private boolean suppressBingoSelection;
     private BingoBoardWindow bingoBoardWindow;
 
     public BingoScapePanel(BingoScapePlugin plugin) {
@@ -54,92 +83,135 @@ public class BingoScapePanel extends PluginPanel {
         this.plugin = plugin;
         this.executor = Executors.newSingleThreadScheduledExecutor();
 
-        // Initialize fade timer
-        this.fadeTimer = new Timer(50, null);
-        fadeTimer.setRepeats(true);
-
-        // Panel setup
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(BORDER_SPACING, BORDER_SPACING, BORDER_SPACING, BORDER_SPACING));
         setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-        // Main content panel setup
-        mainContentPanel.setLayout(new BoxLayout(mainContentPanel, BoxLayout.Y_AXIS));
-        mainContentPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        add(mainContentPanel, BorderLayout.NORTH);
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        add(content, BorderLayout.NORTH);
 
-        // Create show bingo board button
-        showBingoBoardButton = createShowBingoBoardButton();
-
-        // Create reload events button and loading label
         reloadEventsButton = createReloadEventsButton();
-        loadingLabel = createLoadingLabel();
 
-        // Setup all panels
-        setupEventsPanel();
-        setupBingoPanel();
-        setupEventDetailsPanel();
-
-        // Add panels to main content panel
-        mainContentPanel.add(eventsPanel);
-        mainContentPanel.add(bingoPanel);
-        mainContentPanel.add(eventDetailsPanel);
-
-        // Initially hide the bingo panel
-        bingoPanel.setVisible(false);
-    }
-
-    private JLabel createLoadingLabel() {
-        JLabel label = new JLabel("Loading events...");
-        label.setForeground(Color.LIGHT_GRAY);
-        label.setVisible(false);
-        return label;
-    }
-
-    private void setupEventsPanel() {
-        eventsPanel.setLayout(new BorderLayout(0, COMPONENT_SPACING));
-        eventsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        eventsPanel.setBorder(new EmptyBorder(0, 0, COMPONENT_SPACING, 0));
-        eventsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        // Create a header panel that contains the label and reload button
-        JPanel headerPanel = new JPanel(new BorderLayout(COMPONENT_SPACING, 0));
-        headerPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-        JLabel eventsLabel = new JLabel("Select an Event:");
-        eventsLabel.setForeground(Color.WHITE);
-        
-        // Create a button panel to hold both the reload button and loading label
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
-        buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        buttonPanel.add(loadingLabel);
-        buttonPanel.add(reloadEventsButton);
-        
-        headerPanel.add(buttonPanel, BorderLayout.EAST);
-        headerPanel.add(eventsLabel, BorderLayout.WEST);
-
-        eventsPanel.add(headerPanel, BorderLayout.NORTH);
-
+        content.add(createHeader());
+        content.add(sectionLabel("Event"));
         configureEventSelector();
-        eventsPanel.add(eventSelector, BorderLayout.CENTER);
+        content.add(fullWidth(eventSelector));
+
+        noEventsLabel.setFont(FontManager.getRunescapeSmallFont());
+        noEventsLabel.setForeground(BingoTheme.MUTED);
+        noEventsLabel.setBorder(new EmptyBorder(GAP, 0, 0, 0));
+        noEventsLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        noEventsLabel.setVisible(false);
+        content.add(noEventsLabel);
+
+        setupBoardSection();
+        content.add(boardSection);
+
+        content.add(Box.createVerticalStrut(GAP * 2));
+        eventCard.setVisible(false);
+        content.add(eventCard);
+
+        boardSection.setVisible(false);
     }
 
-    private void setupEventDetailsPanel() {
-        eventDetailsPanel.setLayout(new BoxLayout(eventDetailsPanel, BoxLayout.Y_AXIS));
-        eventDetailsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        eventDetailsPanel.setBorder(new EmptyBorder(0, 0, 0, 0));
+    // ---------------------------------------------------------------- layout
+
+    private JPanel createHeader() {
+        JPanel header = new JPanel(new BorderLayout(GAP, 0));
+        header.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        header.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel title = new JLabel("BingoScape");
+        title.setFont(FontManager.getRunescapeBoldFont());
+        title.setForeground(BingoTheme.GOLD);
+        header.add(title, BorderLayout.WEST);
+
+        loadingLabel.setFont(FontManager.getRunescapeSmallFont());
+        loadingLabel.setForeground(BingoTheme.MUTED);
+        loadingLabel.setVisible(false);
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, GAP, 0));
+        actions.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        actions.add(loadingLabel);
+        actions.add(reloadEventsButton);
+        header.add(actions, BorderLayout.EAST);
+
+        return fullWidth(header);
+    }
+
+    private void setupBoardSection() {
+        boardSection.setLayout(new BoxLayout(boardSection, BoxLayout.Y_AXIS));
+        boardSection.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        boardSection.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        boardSection.add(sectionLabel("Board"));
+        configureBingoSelector();
+        boardSection.add(fullWidth(bingoSelector));
+        boardSection.add(Box.createVerticalStrut(GAP));
+
+        boardCard.setVisible(false);
+        boardSection.add(boardCard);
+        boardSection.add(Box.createVerticalStrut(GAP));
+
+        showBingoBoardButton.setFont(FontManager.getRunescapeBoldFont());
+        showBingoBoardButton.setBorder(new EmptyBorder(7, 10, 7, 10));
+        showBingoBoardButton.addActionListener(e -> {
+            Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
+            if (selectedBingo == null) {
+                return;
+            }
+
+            if (plugin.getConfig().boardDisplayMode() == BoardDisplayMode.WINDOW) {
+                openBoardWindow(selectedBingo);
+            } else {
+                plugin.toggleBoard();
+            }
+        });
+        boardSection.add(fullWidth(showBingoBoardButton));
+        boardSection.add(Box.createVerticalStrut(GAP));
+
+        pinButton.setToolTipText("Load this board automatically on startup");
+        pinButton.addActionListener(e -> plugin.toggleBoardPin());
+
+        reloadBoardButton.setToolTipText("Reload board progress");
+        reloadBoardButton.addActionListener(e -> {
+            reloadBoardButton.setEnabled(false);
+            plugin.reloadBoard();
+            reenableLater(reloadBoardButton);
+        });
+
+        JPanel secondary = new JPanel(new GridLayout(1, 2, GAP, 0));
+        secondary.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        secondary.add(pinButton);
+        secondary.add(reloadBoardButton);
+        boardSection.add(fullWidth(secondary));
+    }
+
+    private FlatButton createReloadEventsButton() {
+        BufferedImage icon = ImageUtil.loadImageResource(BingoScapePlugin.class, "/refresh_icon.png");
+        FlatButton button = new FlatButton("", new ImageIcon(icon));
+        button.setBorder(new EmptyBorder(4, 4, 4, 4));
+        button.setPreferredSize(new Dimension(24, 24));
+        button.setToolTipText("Reload events");
+        button.addActionListener(e -> {
+            button.setEnabled(false);
+            loadingLabel.setVisible(true);
+            plugin.fetchActiveEvents();
+            // fetchActiveEvents only calls back on success; don't leave the button disabled on errors
+            Timer fallback = new Timer(RELOAD_FALLBACK_MS, evt -> {
+                button.setEnabled(true);
+                loadingLabel.setVisible(false);
+            });
+            fallback.setRepeats(false);
+            fallback.start();
+        });
+        return button;
     }
 
     private void configureEventSelector() {
-        eventSelector.setRenderer(createEventRenderer());
-        eventSelector.addActionListener(createEventSelectionListener());
-        eventSelector.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        eventSelector.setForeground(Color.WHITE);
-        eventSelector.setFocusable(false);
-    }
-
-    private DefaultListCellRenderer createEventRenderer() {
-        return new DefaultListCellRenderer() {
+        eventSelector.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index,
                                                           boolean isSelected, boolean cellHasFocus) {
@@ -147,220 +219,59 @@ public class BingoScapePanel extends PluginPanel {
                 if (value instanceof EventData) {
                     setText(((EventData) value).getTitle());
                 }
-
-                if (isSelected) {
-                    setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
-                } else {
-                    setBackground(ColorScheme.DARKER_GRAY_COLOR);
-                }
-                setForeground(Color.WHITE);
-
+                styleCell(this, isSelected);
                 return this;
             }
-        };
-    }
-
-    private ActionListener createEventSelectionListener() {
-        return e -> {
+        });
+        eventSelector.addActionListener(e -> {
             EventData selectedEvent = (EventData) eventSelector.getSelectedItem();
             if (selectedEvent != null) {
                 executor.submit(() -> plugin.setEventDetails(selectedEvent));
             }
-        };
-    }
-
-    private JButton createReloadEventsButton() {
-        JButton button = new JButton();
-        button.setIcon(new ImageIcon(getClass().getResource("/refresh_icon.png")));
-        button.setToolTipText("Reload Events");
-        button.setPreferredSize(new Dimension(24, 24));
-        button.setMaximumSize(new Dimension(24, 24));
-        button.setMinimumSize(new Dimension(24, 24));
-        button.setFocusPainted(false);
-        button.setContentAreaFilled(false);
-        button.setForeground(Color.WHITE);
-
-        // Add hover effect
-        button.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                if (button.isEnabled()) {
-                    button.setContentAreaFilled(true);
-                    button.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
-                }
-            }
-
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                button.setContentAreaFilled(false);
-            }
         });
-
-        // Connect to plugin's fetchActiveEvents method with smooth transition
-        button.addActionListener(e -> {
-            reloadEventsButton.setEnabled(false);
-            loadingLabel.setVisible(true);
-            eventSelector.setEnabled(false);
-            
-            // Store current selections
-            EventData selectedEvent = (EventData) eventSelector.getSelectedItem();
-            Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
-            String selectedEventId = selectedEvent != null ? selectedEvent.getId().toString() : null;
-            String selectedBingoId = selectedBingo != null ? selectedBingo.getId().toString() : null;
-            
-            // Start fade out animation
-            for (ActionListener listener : fadeTimer.getActionListeners()) {
-                fadeTimer.removeActionListener(listener);
-            }
-            fadeTimer.addActionListener(evt -> {
-                float alpha = eventSelector.getForeground().getAlpha() - 10;
-                if (alpha <= 0) {
-                    fadeTimer.stop();
-                    executor.submit(() -> {
-                        plugin.fetchActiveEvents();
-                        SwingUtilities.invokeLater(() -> {
-                            reloadEventsButton.setEnabled(true);
-                            loadingLabel.setVisible(false);
-                            eventSelector.setEnabled(true);
-                            
-                            // Restore selections if they still exist
-                            if (selectedEventId != null) {
-                                for (int i = 0; i < eventSelector.getItemCount(); i++) {
-                                    EventData event = eventSelector.getItemAt(i);
-                                    if (event.getId().toString().equals(selectedEventId)) {
-                                        eventSelector.setSelectedIndex(i);
-                                        break;
-                                    }
-                                }
-                            }
-                            
-                            if (selectedBingoId != null) {
-                                for (int i = 0; i < bingoSelector.getItemCount(); i++) {
-                                    Bingo bingo = bingoSelector.getItemAt(i);
-                                    if (bingo.getId().toString().equals(selectedBingoId)) {
-                                        bingoSelector.setSelectedIndex(i);
-                                        break;
-                                    }
-                                }
-                            }
-                            
-                            // Start fade in animation
-                            for (ActionListener listener : fadeTimer.getActionListeners()) {
-                                fadeTimer.removeActionListener(listener);
-                            }
-                            fadeTimer.addActionListener(evt2 -> {
-                                float fadeInAlpha = eventSelector.getForeground().getAlpha() + 10;
-                                if (fadeInAlpha >= 255) {
-                                    fadeTimer.stop();
-                                }
-                                eventSelector.setForeground(new Color(255, 255, 255, (int)fadeInAlpha));
-                            });
-                            fadeTimer.start();
-                        });
-                    });
-                } else {
-                    eventSelector.setForeground(new Color(255, 255, 255, (int)alpha));
-                }
-            });
-            fadeTimer.start();
-        });
-
-        return button;
-    }
-
-    private void setupBingoPanel() {
-        bingoPanel.setLayout(new BorderLayout(0, COMPONENT_SPACING));
-        bingoPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 0, COMPONENT_SPACING, 0));
-        bingoPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        bingoPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        JPanel bingoHeaderPanel = new JPanel(new BorderLayout());
-        bingoHeaderPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-        JLabel bingoLabel = new JLabel("Select a Bingo Board:");
-        bingoLabel.setForeground(Color.WHITE);
-        bingoHeaderPanel.add(bingoLabel, BorderLayout.NORTH);
-
-        configureBingoSelector();
-        bingoHeaderPanel.add(bingoSelector, BorderLayout.CENTER);
-        bingoPanel.add(bingoHeaderPanel, BorderLayout.NORTH);
-
-        // Add button to show bingo board in a popup
-        JPanel buttonPanel = new JPanel(new BorderLayout());
-        buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        buttonPanel.setBorder(new EmptyBorder(COMPONENT_SPACING, 0, 0, 0));
-        buttonPanel.add(showBingoBoardButton, BorderLayout.CENTER);
-        bingoPanel.add(buttonPanel, BorderLayout.CENTER);
+        eventSelector.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        eventSelector.setForeground(Color.WHITE);
+        eventSelector.setFocusable(false);
     }
 
     private void configureBingoSelector() {
-        bingoSelector.setRenderer(createBingoRenderer());
-        bingoSelector.addActionListener(createBingoSelectionListener());
-        bingoSelector.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        bingoSelector.setForeground(Color.WHITE);
-        bingoSelector.setFocusable(false);
-    }
-
-    private DefaultListCellRenderer createBingoRenderer() {
-        return new DefaultListCellRenderer() {
+        bingoSelector.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index,
                                                           boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof Bingo) {
                     Bingo bingo = (Bingo) value;
-                    StringBuilder text = new StringBuilder(bingo.getTitle());
-
-                    // Show if the bingo is locked or visible
+                    StringBuilder text = new StringBuilder("<html>").append(escape(bingo.getTitle()));
                     if (bingo.isLocked()) {
-                        text.append(" [Locked]");
+                        text.append(" <font color='").append(hex(BingoTheme.MUTED)).append("'>[Locked]</font>");
                     }
-
-                    // Show pin icon if this bingo is pinned
-                    if (bingo.getId().toString().equals(plugin.getConfig().pinnedBingoId())) {
-                        text.append(" 📌");
+                    if (isPinned(bingo)) {
+                        text.append(" <font color='").append(hex(BingoTheme.GOLD)).append("'>[Pinned]</font>");
                     }
-
-                    setText(text.toString());
+                    setText(text.append("</html>").toString());
                 }
-
-                if (isSelected) {
-                    setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
-                } else {
-                    setBackground(ColorScheme.DARKER_GRAY_COLOR);
-                }
-                setForeground(Color.WHITE);
-
+                styleCell(this, isSelected);
                 return this;
             }
-        };
-    }
-
-    private ActionListener createBingoSelectionListener() {
-        return e -> {
+        });
+        bingoSelector.addActionListener(e -> {
             Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
-            if (selectedBingo != null) {
-                // Update the current bingo in the plugin first to ensure the overlay gets updated
+            if (!suppressBingoSelection && selectedBingo != null && selectedBingo != plugin.getCurrentBingo()) {
                 plugin.selectBingo(selectedBingo);
             }
-        };
-    }
-
-    private JButton createShowBingoBoardButton() {
-        JButton button = new JButton("Show Bingo Board");
-        button.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        button.setForeground(Color.WHITE);
-        button.setFocusPainted(false);
-        button.addActionListener(e -> {
-            Bingo selectedBingo = (Bingo) bingoSelector.getSelectedItem();
-            if (selectedBingo != null) {
-                showBingoBoardWindow(selectedBingo);
-            }
         });
-        return button;
+        bingoSelector.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        bingoSelector.setForeground(Color.WHITE);
+        bingoSelector.setFocusable(false);
     }
 
-    private void showBingoBoardWindow(Bingo bingo) {
+    // ---------------------------------------------------------------- public API
+
+    /**
+     * Opens the legacy board window (used when the board display mode is WINDOW).
+     */
+    public void openBoardWindow(Bingo bingo) {
         SwingUtilities.invokeLater(() -> {
             if (bingoBoardWindow != null) {
                 bingoBoardWindow.dispose();
@@ -371,18 +282,51 @@ public class BingoScapePanel extends PluginPanel {
         });
     }
 
+    /**
+     * Stops the panel's worker thread. Called when the plugin shuts down.
+     */
+    public void shutdown() {
+        executor.shutdownNow();
+        disposeBoardWindow();
+    }
+
+    public void disposeBoardWindow() {
+        SwingUtilities.invokeLater(() -> {
+            if (bingoBoardWindow != null) {
+                bingoBoardWindow.dispose();
+                bingoBoardWindow = null;
+            }
+        });
+    }
+
+    /**
+     * Updates the board button label to match the overlay's visibility.
+     */
+    public void setBoardButtonState(boolean boardVisible) {
+        SwingUtilities.invokeLater(() ->
+                showBingoBoardButton.setText(boardVisible ? "Hide Bingo Board" : "Show Bingo Board"));
+    }
+
+    /**
+     * Refreshes pin markers after a pin change made outside the panel (e.g. from the overlay).
+     */
+    public void refreshPinState() {
+        SwingUtilities.invokeLater(() -> {
+            bingoSelector.repaint();
+            updatePinButton();
+        });
+    }
+
     public void updateEventsList(List<EventData> events) {
         SwingUtilities.invokeLater(() -> {
-            // Store current selections
             EventData selectedEvent = (EventData) eventSelector.getSelectedItem();
             String selectedEventId = selectedEvent != null ? selectedEvent.getId().toString() : null;
             String pinnedBingoId = plugin.getConfig().pinnedBingoId();
 
-            // Update the event selector model
             DefaultComboBoxModel<EventData> model = new DefaultComboBoxModel<>();
             for (EventData event : events) {
                 model.addElement(event);
-                // If this event contains the pinned bingo, select it
+                // Prefer the event that contains the pinned bingo
                 if (!pinnedBingoId.isEmpty() && event.getBingos().stream()
                         .anyMatch(b -> b.getId().toString().equals(pinnedBingoId))) {
                     selectedEventId = event.getId().toString();
@@ -390,11 +334,9 @@ public class BingoScapePanel extends PluginPanel {
             }
             eventSelector.setModel(model);
 
-            // Restore selection if possible
             if (selectedEventId != null) {
                 for (int i = 0; i < model.getSize(); i++) {
-                    EventData event = model.getElementAt(i);
-                    if (event.getId().toString().equals(selectedEventId)) {
+                    if (model.getElementAt(i).getId().toString().equals(selectedEventId)) {
                         eventSelector.setSelectedIndex(i);
                         break;
                     }
@@ -403,190 +345,49 @@ public class BingoScapePanel extends PluginPanel {
                 eventSelector.setSelectedIndex(0);
             }
 
-            // Update UI state
-            eventSelector.setEnabled(model.getSize() > 0);
+            boolean hasEvents = model.getSize() > 0;
+            eventSelector.setEnabled(hasEvents);
+            noEventsLabel.setVisible(!hasEvents);
+            if (!hasEvents) {
+                eventCard.setVisible(false);
+                boardSection.setVisible(false);
+            }
             reloadEventsButton.setEnabled(true);
             loadingLabel.setVisible(false);
+            revalidate();
+            repaint();
         });
     }
 
-    // Method to update event details with enhanced information
     public void updateEventDetails(EventData eventData) {
-        if (eventData == null) {
-            eventDetailsPanel.setVisible(false);
-            bingoPanel.setVisible(false);
-            return;
-        }
-
-        // Update bingo selector
-        bingoSelector.removeAllItems();
-        String pinnedBingoId = plugin.getConfig().pinnedBingoId();
-        Bingo pinnedBingo = null;
-
-        // First pass to find pinned bingo if it exists
-        if (!pinnedBingoId.isEmpty()) {
-            for (Bingo bingo : eventData.getBingos()) {
-                if (bingo.getId().toString().equals(pinnedBingoId)) {
-                    pinnedBingo = bingo;
-                    break;
-                }
-            }
-        }
-
-        // Add all bingos, with pinned one first if it exists
-        if (pinnedBingo != null) {
-            bingoSelector.addItem(pinnedBingo);
-        }
-        for (Bingo bingo : eventData.getBingos()) {
-            if (pinnedBingo == null || !bingo.getId().equals(pinnedBingo.getId())) {
-                bingoSelector.addItem(bingo);
-            }
-        }
-
-        // Select pinned bingo if it exists, otherwise first bingo
-        if (pinnedBingo != null) {
-            bingoSelector.setSelectedItem(pinnedBingo);
-        } else if (bingoSelector.getItemCount() > 0) {
-            bingoSelector.setSelectedIndex(0);
-        }
-
-        // Rest of the event details update...
-        // ... existing code ...
-
         SwingUtilities.invokeLater(() -> {
-            // Clear previous event details
-            eventDetailsPanel.removeAll();
-            bingoSelector.removeAllItems();
-
-            // Build event details panel
-            if (eventData != null) {
-                // Title panel
-                JPanel titlePanel = new JPanel();
-                titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS));
-                titlePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-                titlePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                titlePanel.setBorder(new EmptyBorder(5, 5, 5, 5));
-                
-                JLabel titleLabel = new JLabel(eventData.getTitle());
-                titleLabel.setFont(FontManager.getRunescapeBoldFont());
-                titleLabel.setForeground(new Color(255, 215, 0)); // Gold color
-                titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                titlePanel.add(titleLabel);
-                
-                // Add status indicator
-                JLabel statusLabel = new JLabel(eventData.isLocked() ? "🔒 Locked" : "✅ Active");
-                statusLabel.setForeground(eventData.isLocked() ? Color.LIGHT_GRAY : new Color(34, 197, 94));
-                statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                titlePanel.add(statusLabel);
-                
-                eventDetailsPanel.add(titlePanel);
-
-                // Event description
-                if (eventData.getDescription() != null && !eventData.getDescription().isEmpty()) {
-                    JTextArea descriptionArea = new JTextArea(eventData.getDescription());
-                    descriptionArea.setWrapStyleWord(true);
-                    descriptionArea.setLineWrap(true);
-                    descriptionArea.setEditable(false);
-                    descriptionArea.setForeground(Color.WHITE);
-                    descriptionArea.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-                    descriptionArea.setBorder(new CompoundBorder(
-                        new MatteBorder(1, 0, 1, 0, ColorScheme.MEDIUM_GRAY_COLOR),
-                        new EmptyBorder(5, 5, 5, 5)
-                    ));
-                    descriptionArea.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    eventDetailsPanel.add(descriptionArea);
-                }
-
-                // Info section
-                JPanel infoSection = new JPanel();
-                infoSection.setLayout(new BoxLayout(infoSection, BoxLayout.Y_AXIS));
-                infoSection.setBackground(ColorScheme.DARK_GRAY_COLOR);
-                infoSection.setBorder(new EmptyBorder(5, 5, 5, 5));
-                infoSection.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-                // Event dates
-                if (eventData.getStartDate() != null && eventData.getEndDate() != null) {
-                    addInfoLabel(infoSection, "📅 Event dates: " +
-                            DATE_FORMAT.format(eventData.getStartDate()) + " - " +
-                            DATE_FORMAT.format(eventData.getEndDate()));
-                }
-
-                // Prize pool
-                if (eventData.getBasePrizePool() > 0) {
-                    addInfoLabel(infoSection, "💰 Prize pool: " + formatGpAmount(eventData.getBasePrizePool()));
-                    if (eventData.getMinimumBuyIn() > 0) {
-                        addInfoLabel(infoSection, "💎 Minimum buy-in: " + formatGpAmount(eventData.getMinimumBuyIn()));
-                    }
-                }
-
-                // Role
-                if (eventData.getRole() != null) {
-                    addInfoLabel(infoSection, "👤 Role: " + formatRole(eventData.getRole()));
-                }
-
-                // Clan
-                if (eventData.getClan() != null) {
-                    addInfoLabel(infoSection, "🏰 Clan: " + eventData.getClan().getName());
-                }
-
-                // Team
-                if (eventData.getUserTeam() != null) {
-                    addInfoLabel(infoSection, "👥 Team: " + eventData.getUserTeam().getName());
-                    if (eventData.getUserTeam().getMembers() != null && !eventData.getUserTeam().getMembers().isEmpty()) {
-                        JPanel membersPanel = new JPanel();
-                        membersPanel.setLayout(new BoxLayout(membersPanel, BoxLayout.Y_AXIS));
-                        membersPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-                        membersPanel.setBorder(new EmptyBorder(0, 15, 0, 0));
-                        membersPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-                        // First add the leader
-                        for (TeamMember member : eventData.getUserTeam().getMembers()) {
-                            if (member.isLeader()) {
-                                String memberText = "• " + member.getRunescapeName() + " 👑";
-                                JLabel memberLabel = new JLabel(memberText);
-                                memberLabel.setForeground(new Color(255, 215, 0));
-                                memberLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                                membersPanel.add(memberLabel);
-                                membersPanel.add(Box.createVerticalStrut(2));
-                                break;
-                            }
-                        }
-
-                        // Then add other members
-                        for (TeamMember member : eventData.getUserTeam().getMembers()) {
-                            if (!member.isLeader()) {
-                                String memberText = "• " + member.getRunescapeName();
-                                JLabel memberLabel = new JLabel(memberText);
-                                memberLabel.setForeground(Color.WHITE);
-                                memberLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                                membersPanel.add(memberLabel);
-                                membersPanel.add(Box.createVerticalStrut(2));
-                            }
-                        }
-                        infoSection.add(membersPanel);
-                    }
-                }
-
-                // Available boards
-                if (eventData.getBingos() != null) {
-                    addInfoLabel(infoSection, "🎯 Available boards: " + eventData.getBingos().size());
-                }
-
-                eventDetailsPanel.add(infoSection);
-                eventDetailsPanel.setVisible(true);
-
-                // Populate bingo selector
-                if (eventData.getBingos() != null && !eventData.getBingos().isEmpty()) {
-                    for (Bingo bingo : eventData.getBingos()) {
-                        bingoSelector.addItem(bingo);
-                    }
-                    bingoPanel.setVisible(true);
-                } else {
-                    bingoPanel.setVisible(false);
-                }
+            if (eventData == null) {
+                eventCard.setVisible(false);
+                boardSection.setVisible(false);
             } else {
-                eventDetailsPanel.setVisible(false);
-                bingoPanel.setVisible(false);
+                rebuildEventCard(eventData);
+                populateBingoSelector(eventData);
+            }
+            revalidate();
+            repaint();
+        });
+    }
+
+    /**
+     * Called whenever the plugin selects or refreshes a bingo.
+     */
+    public void displayBingoBoard(Bingo bingo) {
+        SwingUtilities.invokeLater(() -> {
+            syncBingoSelection(bingo);
+            rebuildBoardCard(bingo);
+            updatePinButton();
+            reloadBoardButton.setEnabled(true);
+
+            // Refresh the legacy window if it's open
+            if (bingoBoardWindow != null && bingoBoardWindow.isVisible() && bingo != null) {
+                bingoBoardWindow.dispose();
+                bingoBoardWindow = new BingoBoardWindow(plugin, bingo);
+                bingoBoardWindow.setVisible(true);
             }
 
             revalidate();
@@ -594,16 +395,361 @@ public class BingoScapePanel extends PluginPanel {
         });
     }
 
-    private void addInfoLabel(JPanel container, String text) {
-        JLabel label = new JLabel(text);
-        label.setForeground(Color.WHITE);
-        label.setAlignmentX(Component.LEFT_ALIGNMENT);
-        container.add(label);
-        container.add(Box.createVerticalStrut(4));
+    // ---------------------------------------------------------------- bingo selector
+
+    private void populateBingoSelector(EventData eventData) {
+        // Copy first: refreshes replace bingos in this list from HTTP callback threads
+        List<Bingo> bingos = eventData.getBingos() == null ? new ArrayList<>() : new ArrayList<>(eventData.getBingos());
+        DefaultComboBoxModel<Bingo> model = new DefaultComboBoxModel<>();
+        for (Bingo bingo : bingos) {
+            if (isPinned(bingo)) {
+                model.insertElementAt(bingo, 0);
+            } else {
+                model.addElement(bingo);
+            }
+        }
+
+        Bingo current = plugin.getCurrentBingo();
+        Bingo picked = plugin.pickBingo(eventData);
+        Bingo toSelect = picked == null ? null : findById(model, picked);
+
+        suppressBingoSelection = true;
+        try {
+            bingoSelector.setModel(model);
+            bingoSelector.setSelectedItem(toSelect);
+        } finally {
+            suppressBingoSelection = false;
+        }
+
+        boardSection.setVisible(model.getSize() > 0);
+        if (toSelect != null && (current == null || !toSelect.getId().equals(current.getId()))) {
+            plugin.selectBingo(toSelect);
+        }
     }
 
-    // Helper method to format GP amounts nicely
-    private String formatGpAmount(long amount) {
+    /**
+     * Keeps the selector in sync with the plugin's bingo, swapping in refreshed bingo objects.
+     */
+    private void syncBingoSelection(Bingo bingo) {
+        if (bingo == null) {
+            return;
+        }
+
+        DefaultComboBoxModel<Bingo> model = (DefaultComboBoxModel<Bingo>) bingoSelector.getModel();
+        suppressBingoSelection = true;
+        try {
+            for (int i = 0; i < model.getSize(); i++) {
+                if (model.getElementAt(i).getId().equals(bingo.getId())) {
+                    if (model.getElementAt(i) != bingo) {
+                        model.removeElementAt(i);
+                        model.insertElementAt(bingo, i);
+                    }
+                    bingoSelector.setSelectedIndex(i);
+                    break;
+                }
+            }
+        } finally {
+            suppressBingoSelection = false;
+        }
+    }
+
+    private static Bingo findById(DefaultComboBoxModel<Bingo> model, Bingo bingo) {
+        for (int i = 0; i < model.getSize(); i++) {
+            if (model.getElementAt(i).getId().equals(bingo.getId())) {
+                return model.getElementAt(i);
+            }
+        }
+        return null;
+    }
+
+    private void updatePinButton() {
+        Bingo bingo = (Bingo) bingoSelector.getSelectedItem();
+        boolean pinned = bingo != null && isPinned(bingo);
+        pinButton.setText(pinned ? "Unpin" : "Pin");
+        pinButton.setEnabled(bingo != null);
+    }
+
+    private boolean isPinned(Bingo bingo) {
+        return bingo.getId() != null && bingo.getId().toString().equals(plugin.getConfig().pinnedBingoId());
+    }
+
+    // ---------------------------------------------------------------- cards
+
+    private void rebuildBoardCard(Bingo bingo) {
+        boardCard.removeAll();
+        if (bingo == null) {
+            boardCard.setVisible(false);
+            return;
+        }
+
+        JPanel titleRow = row();
+        if (bingo.isLocked()) {
+            Pill locked = new Pill();
+            locked.setStatus("Locked", BingoTheme.MUTED);
+            titleRow.add(pillHolder(locked), BorderLayout.EAST);
+            titleRow.add(wrappedLabel(bingo.getTitle(), FontManager.getRunescapeBoldFont(), Color.WHITE, TITLE_WITH_PILL_WIDTH), BorderLayout.CENTER);
+        } else {
+            titleRow.add(wrappedLabel(bingo.getTitle(), FontManager.getRunescapeBoldFont(), Color.WHITE), BorderLayout.CENTER);
+        }
+        boardCard.add(titleRow);
+
+        if (bingo.getCodephrase() != null && !bingo.getCodephrase().trim().isEmpty()) {
+            boardCard.add(Box.createVerticalStrut(2));
+            boardCard.add(wrappedLabel("Codephrase: " + bingo.getCodephrase().trim(), FontManager.getRunescapeSmallFont(), BingoTheme.GOLD));
+        }
+
+        int tiles = 0;
+        int completed = 0;
+        int pending = 0;
+        int needsAction = 0;
+        int declined = 0;
+        int xpTotal = 0;
+        int xpEarned = 0;
+        if (bingo.getTiles() != null) {
+            for (Tile tile : bingo.getTiles()) {
+                if (tile == null || tile.isHidden()) {
+                    continue;
+                }
+                tiles++;
+                xpTotal += tile.getWeight();
+                TileSubmissionType status = TileStatusStyle.statusOf(tile);
+                if (status == null) {
+                    continue;
+                }
+                switch (status) {
+                    case ACCEPTED:
+                        completed++;
+                        xpEarned += tile.getWeight();
+                        break;
+                    case PENDING:
+                        pending++;
+                        break;
+                    case REQUIRES_INTERACTION:
+                        needsAction++;
+                        break;
+                    case DECLINED:
+                        declined++;
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        boardCard.add(Box.createVerticalStrut(GAP));
+        addProgress(boardCard, "Completed", completed, tiles, completed + " / " + tiles);
+        boardCard.add(Box.createVerticalStrut(GAP));
+        addProgress(boardCard, "XP", xpEarned, xpTotal, xpEarned + " / " + xpTotal);
+        boardCard.add(Box.createVerticalStrut(GAP));
+
+        JPanel stats = new JPanel(new GridLayout(1, 3, GAP, 0));
+        stats.setOpaque(false);
+        stats.setAlignmentX(Component.LEFT_ALIGNMENT);
+        stats.add(stat(pending, "Pending", TileStatusStyle.PENDING));
+        stats.add(stat(needsAction, "Action", TileStatusStyle.NEEDS_ACTION));
+        stats.add(stat(declined, "Declined", TileStatusStyle.DECLINED));
+        boardCard.add(fullWidth(stats));
+
+        boardCard.setVisible(true);
+    }
+
+    private void rebuildEventCard(EventData event) {
+        eventCard.removeAll();
+
+        JPanel titleRow = row();
+        titleRow.add(wrappedLabel(event.getTitle(), FontManager.getRunescapeBoldFont(), BingoTheme.GOLD, TITLE_WITH_PILL_WIDTH), BorderLayout.CENTER);
+        Pill status = new Pill();
+        applyEventStatus(status, event);
+        titleRow.add(pillHolder(status), BorderLayout.EAST);
+        eventCard.add(titleRow);
+
+        if (event.getDescription() != null && !event.getDescription().trim().isEmpty()) {
+            eventCard.add(Box.createVerticalStrut(GAP));
+            eventCard.add(wrappedLabel(event.getDescription().trim(), FontManager.getRunescapeSmallFont(), BingoTheme.MUTED));
+        }
+
+        eventCard.add(Box.createVerticalStrut(GAP));
+        if (event.getStartDate() != null && event.getEndDate() != null) {
+            addInfoRow(eventCard, "Starts", DATE_FORMAT.format(event.getStartDate()));
+            addInfoRow(eventCard, "Ends", DATE_FORMAT.format(event.getEndDate()));
+        }
+        if (event.getBasePrizePool() > 0) {
+            addInfoRow(eventCard, "Prize pool", formatGpAmount(event.getBasePrizePool()));
+            if (event.getMinimumBuyIn() > 0) {
+                addInfoRow(eventCard, "Minimum buy-in", formatGpAmount(event.getMinimumBuyIn()));
+            }
+        }
+        if (event.getRole() != null) {
+            addInfoRow(eventCard, "Role", formatRole(event.getRole()));
+        }
+        if (event.getClan() != null) {
+            addInfoRow(eventCard, "Clan", event.getClan().getName());
+        }
+        if (event.getBingos() != null) {
+            addInfoRow(eventCard, "Boards", String.valueOf(event.getBingos().size()));
+        }
+
+        if (event.getUserTeam() != null) {
+            addInfoRow(eventCard, "Team", event.getUserTeam().getName());
+            List<TeamMember> members = event.getUserTeam().getMembers();
+            if (members != null && !members.isEmpty()) {
+                eventCard.add(Box.createVerticalStrut(GAP));
+                // Leader first, then everyone else
+                for (TeamMember member : members) {
+                    if (member.isLeader()) {
+                        addMember(eventCard, member.getRunescapeName() + " (Leader)", BingoTheme.GOLD);
+                    }
+                }
+                for (TeamMember member : members) {
+                    if (!member.isLeader()) {
+                        addMember(eventCard, member.getRunescapeName(), Color.WHITE);
+                    }
+                }
+            }
+        }
+
+        eventCard.setVisible(true);
+    }
+
+    private static void applyEventStatus(Pill pill, EventData event) {
+        Date now = new Date();
+        if (event.isLocked()) {
+            pill.setStatus("Locked", BingoTheme.MUTED);
+        } else if (event.getStartDate() != null && event.getStartDate().after(now)) {
+            pill.setStatus("Upcoming", TileStatusStyle.PENDING);
+        } else if (event.getEndDate() != null && event.getEndDate().before(now)) {
+            pill.setStatus("Ended", BingoTheme.MUTED);
+        } else {
+            pill.setStatus("Active", TileStatusStyle.ACCEPTED);
+        }
+    }
+
+    // ---------------------------------------------------------------- small builders
+
+    private static JLabel sectionLabel(String text) {
+        JLabel label = new JLabel(text.toUpperCase());
+        label.setFont(FontManager.getRunescapeSmallFont());
+        label.setForeground(BingoTheme.MUTED);
+        label.setBorder(new EmptyBorder(GAP * 2, 0, 4, 0));
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return label;
+    }
+
+    private static JPanel row() {
+        JPanel row = new JPanel(new BorderLayout(GAP, 0)) {
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
+        row.setOpaque(false);
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return row;
+    }
+
+    /**
+     * Keeps a pill at its preferred size at the top of a BorderLayout cell.
+     */
+    private static JPanel pillHolder(Pill pill) {
+        JPanel holder = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        holder.setOpaque(false);
+        holder.add(pill);
+        JPanel top = new JPanel(new BorderLayout());
+        top.setOpaque(false);
+        top.add(holder, BorderLayout.NORTH);
+        return top;
+    }
+
+    private static void addInfoRow(JPanel container, String key, String value) {
+        JPanel row = row();
+        JLabel keyLabel = new JLabel(key);
+        keyLabel.setFont(FontManager.getRunescapeSmallFont());
+        keyLabel.setForeground(BingoTheme.MUTED);
+        JLabel valueLabel = new JLabel(value);
+        valueLabel.setFont(FontManager.getRunescapeSmallFont());
+        valueLabel.setForeground(Color.WHITE);
+        valueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+        valueLabel.setToolTipText(value);
+        row.add(keyLabel, BorderLayout.WEST);
+        row.add(valueLabel, BorderLayout.CENTER);
+        row.setBorder(new EmptyBorder(1, 0, 1, 0));
+        container.add(row);
+    }
+
+    private static void addMember(JPanel container, String name, Color color) {
+        JLabel label = new JLabel("- " + name);
+        label.setFont(FontManager.getRunescapeSmallFont());
+        label.setForeground(color);
+        label.setBorder(new EmptyBorder(1, 4, 1, 0));
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        container.add(label);
+    }
+
+    private static void addProgress(JPanel container, String key, int current, int target, String value) {
+        addInfoRow(container, key, value);
+        ProgressBar bar = new ProgressBar();
+        bar.setProgress(current, target);
+        container.add(Box.createVerticalStrut(2));
+        container.add(bar);
+    }
+
+    private static JPanel stat(int count, String caption, Color color) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setOpaque(false);
+
+        JLabel number = new JLabel(String.valueOf(count), SwingConstants.CENTER);
+        number.setFont(FontManager.getRunescapeBoldFont());
+        number.setForeground(count > 0 ? color : BingoTheme.MUTED);
+        JLabel label = new JLabel(caption, SwingConstants.CENTER);
+        label.setFont(FontManager.getRunescapeSmallFont());
+        label.setForeground(BingoTheme.MUTED);
+
+        panel.add(number, BorderLayout.CENTER);
+        panel.add(label, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    private static JLabel wrappedLabel(String text, Font font, Color color) {
+        return wrappedLabel(text, font, color, TEXT_WIDTH);
+    }
+
+    private static JLabel wrappedLabel(String text, Font font, Color color, int width) {
+        JLabel label = new JLabel("<html><body style='width:" + width + "px'>" + escape(text) + "</body></html>");
+        label.setFont(font);
+        label.setForeground(color);
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return label;
+    }
+
+    private static <T extends JComponent> T fullWidth(T component) {
+        component.setAlignmentX(Component.LEFT_ALIGNMENT);
+        component.setMaximumSize(new Dimension(Integer.MAX_VALUE, component.getPreferredSize().height));
+        return component;
+    }
+
+    private static void styleCell(JLabel cell, boolean selected) {
+        cell.setBackground(selected ? ColorScheme.MEDIUM_GRAY_COLOR : ColorScheme.DARKER_GRAY_COLOR);
+        cell.setForeground(Color.WHITE);
+    }
+
+    private static void reenableLater(JComponent component) {
+        Timer timer = new Timer(RELOAD_FALLBACK_MS, e -> component.setEnabled(true));
+        timer.setRepeats(false);
+        timer.start();
+    }
+
+    private static String escape(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>");
+    }
+
+    private static String hex(Color color) {
+        return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
+    }
+
+    private static String formatGpAmount(long amount) {
         if (amount >= 1_000_000_000) {
             return (amount / 1_000_000_000) + "B GP";
         } else if (amount >= 1_000_000) {
@@ -615,8 +761,10 @@ public class BingoScapePanel extends PluginPanel {
         }
     }
 
-    private String formatRole(Role role) {
-        if (role == null) return "Participant";
+    private static String formatRole(Role role) {
+        if (role == null) {
+            return "Participant";
+        }
 
         switch (role) {
             case ADMIN:
@@ -627,18 +775,6 @@ public class BingoScapePanel extends PluginPanel {
                 return "Participant";
             default:
                 return role.toString();
-        }
-    }
-
-    public void displayBingoBoard(Bingo bingo) {
-        // Update the bingo board window if it's open
-        if (bingoBoardWindow != null && bingoBoardWindow.isVisible()) {
-            // Close and reopen with fresh data to ensure a full refresh
-            SwingUtilities.invokeLater(() -> {
-                bingoBoardWindow.dispose();
-                bingoBoardWindow = new BingoBoardWindow(plugin, bingo);
-                bingoBoardWindow.setVisible(true);
-            });
         }
     }
 }

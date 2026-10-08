@@ -248,6 +248,12 @@ public class AutoSubmissionHandler {
             return false;
         }
 
+        // The server rejects submissions for locked bingos; don't take screenshots for nothing
+        if (plugin.getCurrentBingo().isLocked()) {
+            log.debug("Current bingo is locked, skipping auto-submission");
+            return false;
+        }
+
         // Check if the requirement matcher has any trackable tiles
         if (!requirementMatcher.hasTrackableTiles()) {
             log.warn("Requirement matcher has no trackable tiles. Stats: {}", requirementMatcher.getStats());
