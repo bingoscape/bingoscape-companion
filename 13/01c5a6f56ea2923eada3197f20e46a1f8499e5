@@ -1,0 +1,65 @@
+src/main/java/org/bingoscape/BingoScapePlugin.java
+  s_979d71c1db30e5::t_3907a64c4859b4 233
+  s_979d71c1db30e5::t_5805d87abf538e 197-198
+  s_979d71c1db30e5::t_997b23f3b9549d 398-410,412-426
+  s_979d71c1db30e5::t_d681b227643810 459
+  s_979d71c1db30e5::t_0908bf093ad41a 121-123
+  s_979d71c1db30e5::t_5dc39d85dc16dc 168-169
+  s_979d71c1db30e5::t_ffc1683815e851 302-313
+  s_979d71c1db30e5::t_0738b97abea3ff 260-276
+  s_979d71c1db30e5::t_f63fb63497f62f 194-196,411
+src/main/java/org/bingoscape/services/BingoScapeApiService.java
+  s_979d71c1db30e5::t_cd6936c3862d49 71-91,94-109,112-121,124,126,128-130,132-149
+  s_979d71c1db30e5::t_d5b80cef1e900c 92-93,110-111,122-123,125,127,131,150
+src/main/java/org/bingoscape/services/TeamDropPoller.java
+  s_979d71c1db30e5::t_7f4636dbd30f6a 1-3,6-9,11-15,17-29,31-34,37-47,49-55,57-68,77,79-84,87-90,92-95,97-101,111-156,163-164,170-178,185-194,211-221,255-257,259-263,271-273,290,301-302,304-309,311-314,318-319,339,344,346-351,353-370,372-378,427-487,489-492,516,518-534,539-540
+  s_979d71c1db30e5::t_afac248f2fadcc 4-5,10,16,30,35-36,48,56,69-76,78,85-86,91,96,102-110,157-162,165-169,179-184,195-210,222-254,258,264-270,274-289,291-300,303,310,315-317,320-338,340-343,345,379-426,493-514,535-538
+  s_979d71c1db30e5::t_f66c86a2cef5a4 352,371,488,515,517
+src/main/java/org/bingoscape/BingoScapeConfig.java
+  s_979d71c1db30e5::t_bf131834179104 157-166,170-171,175-176
+  s_979d71c1db30e5::t_c59a6a06b5004d 167-169,172-174
+src/main/java/org/bingoscape/models/TeamDropsResponse.java
+  s_979d71c1db30e5::t_e7c8b23206430a 1-54
+src/main/java/org/bingoscape/models/ApiError.java
+  s_979d71c1db30e5::t_4fdf24d78ca17f 34-37
+  s_979d71c1db30e5::t_24254d51717cd8 13,16-21
+src/test/java/org/bingoscape/notifications/DropNotificationOverlayTest.java
+  s_979d71c1db30e5::t_23a0c99e4085ec 6,23-30,67-128
+src/test/java/org/bingoscape/services/TeamDropPollerTest.java
+  s_979d71c1db30e5::t_afac248f2fadcc 20
+  s_979d71c1db30e5::t_097e23595403c7 4,6,15,164-271
+  s_979d71c1db30e5::t_90dbd4e2fcf7b5 1-3,5,7-14,16-19,21-163,272-273
+src/main/java/org/bingoscape/notifications/DropNotification.java
+  s_979d71c1db30e5::t_0b97836f598791 3,10
+  s_979d71c1db30e5::t_e3a54e9c3d49fe 23-34
+  s_979d71c1db30e5::t_4359f522bd47ab 11
+src/main/java/org/bingoscape/notifications/DropNotificationOverlay.java
+  s_979d71c1db30e5::t_fe4f10d167ea5b 63
+  s_979d71c1db30e5::t_d363f819225b95 398-405
+  s_979d71c1db30e5::t_23a0c99e4085ec 23-24,28-29,37-39,50-52,55,79-92,96-110,116,120,123-125,138-139,143,154-158,241,286-350,406-414
+  s_979d71c1db30e5::t_e7a5141bfe4b46 240,244,247-250
+  s_979d71c1db30e5::t_faaac84a20f82e 391
+  s_979d71c1db30e5::t_0460a5c31d431b 351
+src/main/java/org/bingoscape/models/TeamCompletionsResponse.java
+  s_979d71c1db30e5::t_881bf3a5bde937 1-36
+src/main/java/org/bingoscape/notifications/Notification.java
+  s_979d71c1db30e5::t_369920b9440aa7 1-11
+src/main/java/org/bingoscape/notifications/TileCompletedNotification.java
+  s_979d71c1db30e5::t_d1c6a1dd7da677 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1301c5a6f56ea2923eada3197f20e46a1f8499e5",
+  "prompts": {},
+  "sessions": {
+    "s_979d71c1db30e5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f5e63b2d-3fc1-40ca-bd87-7a2f48800df4",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Sebastian Schubert <sschubert932@gmail.com>"
+    }
+  }
+}
