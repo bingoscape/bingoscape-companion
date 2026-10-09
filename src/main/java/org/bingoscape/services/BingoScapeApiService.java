@@ -68,6 +68,86 @@ public class BingoScapeApiService {
         });
     }
 
+    /**
+     * Polls the team drop feed. A null cursor asks for the head cursor only (no backfill).
+     * Errors carry the HTTP status and the Retry-After header (429).
+     */
+    public void fetchTeamDrops(String cursor, int limit, Consumer<TeamDropsResponse> onSuccess, Consumer<ApiError> onError) {
+        fetchFeed("/api/runelite/team-drops", "team drops", cursor, limit, TeamDropsResponse.class, onSuccess, onError);
+    }
+
+    /**
+     * Polls the team tile completion feed, same contract as {@link #fetchTeamDrops}.
+     */
+    public void fetchTeamCompletions(String cursor, int limit, Consumer<TeamCompletionsResponse> onSuccess, Consumer<ApiError> onError) {
+        fetchFeed("/api/runelite/team-tile-completions", "team completions", cursor, limit, TeamCompletionsResponse.class, onSuccess, onError);
+    }
+
+    private <T> void fetchFeed(String path, String label, String cursor, int limit, Class<T> type,
+                               Consumer<T> onSuccess, Consumer<ApiError> onError) {
+        if (!hasApiKey()) {
+            onError.accept(new ApiError(ApiError.NO_RESPONSE, "No API key configured"));
+            return;
+        }
+
+        HttpUrl base = HttpUrl.parse(config.apiBaseUrl() + path);
+        if (base == null) {
+            onError.accept(new ApiError(ApiError.NO_RESPONSE, "Invalid API base URL"));
+            return;
+        }
+        HttpUrl.Builder url = base.newBuilder().addQueryParameter("limit", String.valueOf(limit));
+        if (cursor != null) {
+            url.addQueryParameter("since", cursor);
+        }
+        Request request = new Request.Builder()
+                .url(url.build())
+                .header("Authorization", "Bearer " + config.apiKey())
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                log.debug("Failed to fetch {}", label, e);
+                onError.accept(new ApiError(ApiError.NO_RESPONSE, "Failed to fetch " + label + ": " + e.getMessage()));
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful() || responseBody == null) {
+                        onError.accept(new ApiError(response.code(), "Unsuccessful response: " + response,
+                                parseRetryAfter(response.header("Retry-After"))));
+                        return;
+                    }
+
+                    T parsed;
+                    try {
+                        parsed = gson.fromJson(responseBody.string(), type);
+                    } catch (RuntimeException e) {
+                        onError.accept(new ApiError(response.code(), "Invalid " + label + " response: " + e.getMessage()));
+                        return;
+                    }
+                    if (parsed == null) {
+                        onError.accept(new ApiError(response.code(), "Empty " + label + " response"));
+                        return;
+                    }
+                    onSuccess.accept(parsed);
+                }
+            }
+        });
+    }
+
+    static long parseRetryAfter(String header) {
+        if (header == null) {
+            return -1;
+        }
+        try {
+            return Math.max(0, Long.parseLong(header.trim()));
+        } catch (NumberFormatException e) {
+            return -1; // HTTP-date form is not supported
+        }
+    }
+
     public void refreshBingoBoard(UUID bingoId, Consumer<Bingo> onSuccess, Consumer<ApiError> onError) {
         if (!hasApiKey()) {
             onError.accept(new ApiError(ApiError.NO_RESPONSE, "No API key configured"));

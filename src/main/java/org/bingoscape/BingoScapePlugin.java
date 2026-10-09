@@ -119,6 +119,9 @@ public class BingoScapePlugin extends Plugin {
     private AutoSubmissionHandler autoSubmissionHandler;
 
     @Inject
+    private org.bingoscape.services.TeamDropPoller teamDropPoller;
+
+    @Inject
     private org.bingoscape.notifications.DropNotificationOverlay dropOverlay;
 
     @Getter
@@ -162,6 +165,8 @@ public class BingoScapePlugin extends Plugin {
     @Getter
     private volatile Bingo currentBingo;
     private boolean isLoggedIn;
+    // Event, bingo and team the team drop feed is baselined for
+    private volatile String teamDropScope = "";
 
     @Override
     protected void startUp() {
@@ -185,6 +190,11 @@ public class BingoScapePlugin extends Plugin {
         mouseManager.registerMouseWheelListener(boardInputListener);
         keyManager.registerKeyListener(boardInputListener);
         keyManager.registerKeyListener(boardHotkeyListener);
+
+        teamDropPoller.configureBoardRefresh(
+                () -> currentBingo == null || currentBingo.getId() == null ? null : currentBingo.getId().toString(),
+                this::refreshBingoBoard);
+        updateTeamDropPolling(false);
 
         // Load all events and handle pinned bingo
         if (hasApiKey()) {
@@ -220,6 +230,7 @@ public class BingoScapePlugin extends Plugin {
 
     @Override
     protected void shutDown() {
+        teamDropPoller.stop();
         dropOverlay.clear();
         overlayManager.remove(dropOverlay);
         clientToolbar.removeNavigation(navButton);
@@ -246,7 +257,23 @@ public class BingoScapePlugin extends Plugin {
 
     @Subscribe
     public void onConfigChanged(ConfigChanged event) {
-        if (!BingoScapeConfig.CONFIG_GROUP.equals(event.getGroup()) || !"boardDisplayMode".equals(event.getKey())) {
+        if (!BingoScapeConfig.CONFIG_GROUP.equals(event.getGroup())) {
+            return;
+        }
+
+        switch (event.getKey()) {
+            case "apiKey":
+                updateTeamDropPolling(true);
+                return;
+            case "showToastNotifications":
+            case "showTeamDropNotifications":
+            case "showTileCompletedNotifications":
+                updateTeamDropPolling(false);
+                return;
+            default:
+                break;
+        }
+        if (!"boardDisplayMode".equals(event.getKey())) {
             return;
         }
 
@@ -267,6 +294,18 @@ public class BingoScapePlugin extends Plugin {
             case LOGIN_SCREEN_AUTHENTICATOR:
             case CONNECTION_LOST:
                 dropOverlay.clear();
+                break;
+            default:
+                break;
+        }
+
+        switch (gameStateChanged.getGameState()) {
+            case LOGGED_IN:
+                updateTeamDropPolling(false);
+                break;
+            case LOGIN_SCREEN:
+            case CONNECTION_LOST:
+                teamDropPoller.stop();
                 break;
             default:
                 break;
@@ -356,6 +395,35 @@ public class BingoScapePlugin extends Plugin {
         if (bingo != null) {
             selectBingo(bingo);
         }
+        rebaselineTeamDropsIfScopeChanged();
+    }
+
+    /**
+     * Starts or stops the team drop feed for the current game state and config.
+     *
+     * @param apiKeyChanged forget an earlier 401/403 and start from a fresh baseline
+     */
+    private void updateTeamDropPolling(boolean apiKeyChanged) {
+        if (client.getGameState() != GameState.LOGGED_IN) {
+            teamDropPoller.stop();
+        } else if (apiKeyChanged) {
+            teamDropPoller.restart();
+        } else if (teamDropPoller.isEnabled()) {
+            teamDropPoller.start(this::getAccountName);
+        } else {
+            teamDropPoller.stop();
+        }
+    }
+
+    private void rebaselineTeamDropsIfScopeChanged() {
+        EventData event = currentEvent;
+        Bingo bingo = currentBingo;
+        String scope = (event == null ? "" : event.getId() + "/" + (event.getUserTeam() == null ? "" : event.getUserTeam().getName()))
+                + "|" + (bingo == null ? "" : bingo.getId());
+        if (!scope.equals(teamDropScope)) {
+            teamDropScope = scope;
+            teamDropPoller.rebaseline();
+        }
     }
 
     /**
@@ -388,6 +456,7 @@ public class BingoScapePlugin extends Plugin {
     public void selectBingo(Bingo bingo) {
         currentBingo = bingo;
         panel.displayBingoBoard(currentBingo);
+        rebaselineTeamDropsIfScopeChanged();
 
         // Rebuild requirement matcher lookup maps for auto-submission
         // The matcher will query currentBingo directly from the plugin

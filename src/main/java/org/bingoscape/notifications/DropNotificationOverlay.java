@@ -20,12 +20,13 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 /**
  * Drop popup at the top center of the game view. Colored by the value tier of the drop, slides in,
- * holds, fades out; further drops wait in a queue.
+ * holds, fades out; further popups wait in a queue. Tile completions are shown before drops and are
+ * held longer; the running popup is never interrupted.
  */
 @Singleton
 public class DropNotificationOverlay extends Overlay {
@@ -33,6 +34,9 @@ public class DropNotificationOverlay extends Overlay {
     static final long FADE_MS = 400;
     private static final int MAX_QUEUE = 10;
     private static final double QUEUED_HOLD_FACTOR = 0.6;
+    private static final double COMPLETION_HOLD_FACTOR = 1.5;
+    private static final Color GOLD = new Color(255, 196, 0);
+    private static final Color GREEN = new Color(80, 200, 100);
 
     private static final int BASE_WIDTH = 300;
     private static final int PADDING = 8;
@@ -43,10 +47,12 @@ public class DropNotificationOverlay extends Overlay {
 
     private final BingoScapeConfig config;
     private final ItemManager itemManager;
-    private final Queue<DropNotification> queue = new ConcurrentLinkedQueue<>();
+    // Guarded by itself; one FIFO per priority, completions first
+    private final Deque<Notification> completionQueue = new ArrayDeque<>();
+    private final Deque<Notification> dropQueue = new ArrayDeque<>();
 
     // Render-thread only
-    private DropNotification current;
+    private Notification current;
     private long startedAt;
     private boolean hurry;
     private int cachedScale = -1;
@@ -54,6 +60,7 @@ public class DropNotificationOverlay extends Overlay {
     private Font bold;
 
     // Text of the current popup fitted to the card; reset when the popup or the scale changes
+    private String fittedCaption;
     private String fittedName;
     private String valueText;
     private String fittedTile;
@@ -69,28 +76,53 @@ public class DropNotificationOverlay extends Overlay {
         setMovable(false);
     }
 
-    public void enqueue(DropNotification notification) {
-        if (queue.size() < MAX_QUEUE) {
-            queue.offer(notification);
+    /**
+     * Queues a popup. When the queue is full, the oldest waiting drop makes room for a completion; a drop
+     * that finds no room is discarded.
+     */
+    public void enqueue(Notification notification) {
+        synchronized (this) {
+            boolean completion = notification.priority() == Notification.PRIORITY_COMPLETION;
+            if (queueSize() >= MAX_QUEUE) {
+                if (!completion || dropQueue.isEmpty()) {
+                    return;
+                }
+                dropQueue.pollFirst();
+            }
+            (completion ? completionQueue : dropQueue).offerLast(notification);
         }
     }
 
-    public void clear() {
-        queue.clear();
+    public synchronized void clear() {
+        completionQueue.clear();
+        dropQueue.clear();
+    }
+
+    synchronized int queueSize() {
+        return completionQueue.size() + dropQueue.size();
+    }
+
+    /**
+     * Next popup to show: completions before drops, first in first out within the same kind.
+     */
+    synchronized Notification pollNext() {
+        Notification next = completionQueue.pollFirst();
+        return next != null ? next : dropQueue.pollFirst();
     }
 
     @Override
     public Dimension render(Graphics2D graphics) {
         long now = System.currentTimeMillis();
-        if (current != null && now - startedAt >= totalMs(holdMs(), hurry)) {
+        if (current != null && now - startedAt >= totalMs(holdMs(current), hurry)) {
             current = null;
         }
         if (current == null) {
-            current = queue.poll();
+            current = pollNext();
             if (current != null) {
                 startedAt = now;
-                // Decided once per popup so the fade timing cannot jump when more drops arrive
-                hurry = !queue.isEmpty();
+                // Decided once per popup so the fade timing cannot jump when more drops arrive;
+                // completions always get their full time
+                hurry = current instanceof DropNotification && queueSize() > 0;
                 resetFittedText();
             }
         }
@@ -103,11 +135,12 @@ public class DropNotificationOverlay extends Overlay {
         int pad = (int) Math.round(PADDING * scale);
         FontMetrics small = graphics.getFontMetrics(regular);
         FontMetrics big = graphics.getFontMetrics(bold);
-        Layout layout = Layout.of(small.getHeight(), big.getHeight(), pad, current.getWarning() != null);
+        Layout layout = Layout.of(small.getHeight(), big.getHeight(), pad,
+                current instanceof DropNotification && ((DropNotification) current).getWarning() != null);
         int width = (int) Math.round(BASE_WIDTH * scale);
 
         long elapsed = now - startedAt;
-        float alpha = alpha(elapsed, holdMs(), hurry);
+        float alpha = alpha(elapsed, holdMs(current), hurry);
         int slideOffset = (int) Math.round(-layout.height * (1 - slideProgress(elapsed)));
 
         Graphics2D g = (Graphics2D) graphics.create();
@@ -118,7 +151,11 @@ public class DropNotificationOverlay extends Overlay {
             g.clipRect(0, 0, width, layout.height);
             g.translate(0, slideOffset);
             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-            paintCard(g, current, width, layout, scale, pad);
+            if (current instanceof TileCompletedNotification) {
+                paintCompletion(g, (TileCompletedNotification) current, width, layout, scale, pad);
+            } else {
+                paintCard(g, (DropNotification) current, width, layout, scale, pad);
+            }
         } finally {
             g.dispose();
         }
@@ -191,8 +228,6 @@ public class DropNotificationOverlay extends Overlay {
         // Caption row: "Bingo Item" left, tier pill (and +N queued) right
         g.setFont(regular);
         FontMetrics small = g.getFontMetrics();
-        shadowed(g, "Bingo Item", textX, layout.captionY + small.getAscent(), BingoTheme.MUTED);
-
         String tierLabel = drop.getTier().label();
         int pillWidth = small.stringWidth(tierLabel) + 12;
         int pillX = textRight - pillWidth;
@@ -202,11 +237,17 @@ public class DropNotificationOverlay extends Overlay {
         g.drawRoundRect(pillX, layout.captionY, pillWidth - 1, layout.pillHeight - 1, layout.pillHeight, layout.pillHeight);
         shadowed(g, tierLabel, pillX + 6, layout.captionY + 1 + small.getAscent(), accent);
 
-        int queued = queue.size();
+        int captionRight = pillX - 4;
+        int queued = queueSize();
         if (queued > 0) {
             String more = "+" + queued;
+            captionRight -= small.stringWidth(more) + 4;
             shadowed(g, more, pillX - 4 - small.stringWidth(more), layout.captionY + small.getAscent(), BingoTheme.MUTED);
         }
+        if (fittedCaption == null) {
+            fittedCaption = ellipsize(caption(drop), small, captionRight - textX);
+        }
+        shadowed(g, fittedCaption, textX, layout.captionY + small.getAscent(), BingoTheme.MUTED);
 
         // Item name in the tier color
         g.setFont(bold);
@@ -239,6 +280,72 @@ public class DropNotificationOverlay extends Overlay {
             g.fillRect(2, layout.warningY, width - 4, height - layout.warningY - 2);
             int textY = layout.warningY + (height - 2 - layout.warningY - small.getHeight()) / 2 + small.getAscent();
             shadowed(g, fittedWarning, pad, textY, WARNING);
+        }
+    }
+
+    private void paintCompletion(Graphics2D g, TileCompletedNotification done, int width, Layout layout, double scale, int pad) {
+        int arc = (int) Math.round(RADIUS * scale);
+        int height = layout.height;
+
+        g.setColor(ColorScheme.DARKER_GRAY_COLOR);
+        g.fillRoundRect(0, 0, width, height, arc, arc);
+        g.setColor(BingoTheme.withAlpha(GREEN, 30));
+        g.fillRoundRect(0, 0, width, height, arc, arc);
+        g.setStroke(new BasicStroke(3f));
+        g.setColor(BingoTheme.withAlpha(GOLD, 60));
+        g.drawRoundRect(1, 1, width - 3, height - 3, arc, arc);
+        g.setStroke(new BasicStroke(1.5f));
+        g.setColor(GOLD);
+        g.drawRoundRect(1, 1, width - 3, height - 3, arc, arc);
+
+        // Checkmark on a tinted square, centered in the content area
+        int box = (int) Math.round(ICON_BOX * scale);
+        int boxY = Math.max(pad, (layout.contentBottom - box) / 2);
+        g.setColor(BingoTheme.withAlpha(GREEN, 50));
+        g.fillRoundRect(pad, boxY, box, box, arc, arc);
+        g.setColor(BingoTheme.withAlpha(GREEN, 140));
+        g.setStroke(new BasicStroke(1f));
+        g.drawRoundRect(pad, boxY, box - 1, box - 1, arc, arc);
+        g.setStroke(new BasicStroke(Math.max(2f, (float) (3 * scale)), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.setColor(GREEN);
+        int[] xs = {pad + box * 22 / 100, pad + box * 43 / 100, pad + box * 78 / 100};
+        int[] ys = {boxY + box * 53 / 100, boxY + box * 72 / 100, boxY + box * 30 / 100};
+        g.drawPolyline(xs, ys, 3);
+
+        int textX = pad + box + pad;
+        int textRight = width - pad;
+
+        g.setFont(regular);
+        FontMetrics small = g.getFontMetrics();
+        int captionRight = textRight;
+        int queued = queueSize();
+        if (queued > 0) {
+            String more = "+" + queued;
+            captionRight -= small.stringWidth(more);
+            shadowed(g, more, textRight - small.stringWidth(more), layout.captionY + small.getAscent(), BingoTheme.MUTED);
+        }
+        if (fittedCaption == null) {
+            fittedCaption = ellipsize("Tile Completed", small, captionRight - textX);
+        }
+        shadowed(g, fittedCaption, textX, layout.captionY + small.getAscent(), GREEN);
+
+        g.setFont(bold);
+        FontMetrics big = g.getFontMetrics();
+        if (fittedName == null) {
+            fittedName = ellipsize(done.getTileTitle(), big, textRight - textX);
+        }
+        shadowed(g, fittedName, textX, layout.nameY + big.getAscent(), GOLD);
+
+        g.setFont(regular);
+        if (valueText == null) {
+            valueText = done.getPoints() > 0 ? "+" + done.getPoints() + " pts" : "";
+            if (done.getTeamName() != null && !done.getTeamName().trim().isEmpty()) {
+                fittedTile = ellipsize(done.getTeamName().trim(), small, textRight - (textX + small.stringWidth(valueText) + pad));
+            }
+        }
+        shadowed(g, valueText, textX, layout.statY + small.getAscent(), Color.WHITE);
+        if (fittedTile != null) {
+            shadowed(g, fittedTile, textRight - small.stringWidth(fittedTile), layout.statY + small.getAscent(), BingoTheme.MUTED);
         }
     }
 
@@ -281,14 +388,30 @@ public class DropNotificationOverlay extends Overlay {
     }
 
     private void resetFittedText() {
+        fittedCaption = null;
         fittedName = null;
         valueText = null;
         fittedTile = null;
         fittedWarning = null;
     }
 
-    private long holdMs() {
-        return config.notificationSeconds() * 1000L;
+    /**
+     * Caption of the card: who received the drop for team drops, else the generic label.
+     */
+    static String caption(DropNotification drop) {
+        String player = drop.getPlayerName();
+        return player == null || player.trim().isEmpty() ? "Bingo Item" : player.trim() + " received";
+    }
+
+    private long holdMs(Notification notification) {
+        return holdFor(notification, config.notificationSeconds() * 1000L);
+    }
+
+    /**
+     * Hold time of a popup: completions stay 1.5 times as long as drops.
+     */
+    static long holdFor(Notification notification, long baseMs) {
+        return notification instanceof TileCompletedNotification ? Math.round(baseMs * COMPLETION_HOLD_FACTOR) : baseMs;
     }
 
     private static void shadowed(Graphics2D g, String text, int x, int baseline, Color color) {

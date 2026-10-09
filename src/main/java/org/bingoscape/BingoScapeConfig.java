@@ -154,4 +154,24 @@ public interface BingoScapeConfig extends Config {
     default int dropLegendaryValue() {
         return 100_000_000;
     }
+
+    @ConfigItem(keyName = "showTeamDropNotifications", name = "Show Team Drops", description = "Show a popup when a teammate receives a drop for a bingo tile. Requires the drop popup to be enabled", section = notificationSection, position = 7)
+    default boolean showTeamDropNotifications() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "teamDropMinValue", name = "Team Drop Min Value", description = "Only show team drops worth at least this many gp (0 shows all)", section = notificationSection, position = 8)
+    default int teamDropMinValue() {
+        return 0;
+    }
+
+    @ConfigItem(keyName = "showTileCompletedNotifications", name = "Show Tile Completions", description = "Show a popup when your team completes a bingo tile. Requires the drop popup to be enabled", section = notificationSection, position = 9)
+    default boolean showTileCompletedNotifications() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "tileCompletedSound", name = "Tile Completed Sound", description = "Play a sound when your team completes a bingo tile", section = notificationSection, position = 10)
+    default boolean tileCompletedSound() {
+        return true;
+    }
 }

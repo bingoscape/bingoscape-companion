@@ -10,8 +10,15 @@ public class ApiError {
 
     private final int statusCode;
     private final String message;
+    private final long retryAfterSeconds;
 
     public ApiError(int statusCode, String message) {
+        this(statusCode, message, -1);
+    }
+
+    /** @param retryAfterSeconds value of the Retry-After header, or -1 when absent */
+    public ApiError(int statusCode, String message, long retryAfterSeconds) {
+        this.retryAfterSeconds = retryAfterSeconds;
         this.statusCode = statusCode;
         this.message = message != null ? message : "HTTP " + statusCode + " Error";
     }
@@ -22,6 +29,10 @@ public class ApiError {
 
     public String getMessage() {
         return message;
+    }
+
+    public long getRetryAfterSeconds() {
+        return retryAfterSeconds;
     }
 
     public boolean isLocked() {
