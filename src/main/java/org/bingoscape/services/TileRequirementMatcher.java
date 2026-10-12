@@ -5,6 +5,8 @@ import org.bingoscape.BingoScapePlugin;
 import org.bingoscape.models.Bingo;
 import org.bingoscape.models.Goal;
 import org.bingoscape.models.GoalTreeNode;
+import org.bingoscape.models.ProgressionMetadata;
+import org.bingoscape.models.TierState;
 import org.bingoscape.models.Tile;
 import org.bingoscape.models.TileSubmissionType;
 
@@ -51,6 +53,12 @@ public class TileRequirementMatcher {
         log.debug("Rebuilding lookup maps for {} tiles", currentBingo.getTiles().size());
 
         for (Tile tile : currentBingo.getTiles()) {
+            // Locked-tier and blind tiles are stubs; the server would reject a submission for them anyway
+            if (isLockedOrBlind(currentBingo, tile)) {
+                log.debug("Skipping tile {} (locked or blind)", tile.getId());
+                continue;
+            }
+
             // Skip tiles that are already approved
             if (isTileApproved(tile)) {
                 log.debug("Skipping tile {} (already approved)", tile.getId());
@@ -251,6 +259,23 @@ public class TileRequirementMatcher {
      */
     static boolean isTileApproved(Tile tile) {
         return tile.getSubmission() != null && tile.getSubmission().getStatus() == TileSubmissionType.ACCEPTED;
+    }
+
+    /**
+     * Whether the tile is blind (battleship, before the start) or in a locked progression tier. Such tiles
+     * have no goals to match and cannot be submitted. The tile flag and the board's tier state both count.
+     */
+    static boolean isLockedOrBlind(Bingo bingo, Tile tile) {
+        if (tile.isBlind() || tile.isTierLocked()) {
+            return true;
+        }
+
+        ProgressionMetadata progression = bingo == null ? null : bingo.getProgression();
+        if (progression == null || tile.getTier() == null) {
+            return false;
+        }
+        TierState state = progression.stateOf(tile.getTier());
+        return state != null && !state.isUnlocked();
     }
 
     /**
