@@ -23,6 +23,9 @@ interface BoardKind {
      * Picks the kind for a board type. Null and any type without its own kind get the standard board.
      */
     static BoardKind forType(BingoType type) {
+        if (type == BingoType.PROGRESSION) {
+            return ProgressionKind.SHOW_LOCKED;
+        }
         return StandardKind.INSTANCE;
     }
 

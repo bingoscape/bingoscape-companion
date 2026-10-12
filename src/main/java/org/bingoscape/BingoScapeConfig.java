@@ -113,6 +113,11 @@ public interface BingoScapeConfig extends Config {
         return true;
     }
 
+    @ConfigItem(keyName = "progressionShowLockedTiles", name = "Locked Tier Tiles", description = "How tiles of locked progression tiers are shown: dimmed with a lock, or hidden so only the tier header remains", section = boardSection, position = 7)
+    default LockedTileDisplay progressionShowLockedTiles() {
+        return LockedTileDisplay.DIM;
+    }
+
     @ConfigSection(name = "Notifications", description = "Drop popup settings", position = 10)
     String notificationSection = "notifications";
 
