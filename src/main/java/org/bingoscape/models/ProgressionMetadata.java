@@ -12,4 +12,5 @@ public class ProgressionMetadata {
     private List<TierXpRequirement> tierXpRequirements;
     private List<Integer> unlockedTiers;
     private List<TierProgress> tierProgress;
+    private List<TierState> tiers; // Every tier of the board, including locked ones
 }

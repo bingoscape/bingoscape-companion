@@ -21,6 +21,8 @@ public class Tile {
     private int index;
     private Integer tier;
     private boolean isHidden;
+    private boolean isBlind; // Battleship tile redacted before the event starts
+    private boolean tierLocked; // Progression tile of a locked tier (stub without content)
     private Date createdAt;
     private Date updatedAt;
     private TileSubmission submission;

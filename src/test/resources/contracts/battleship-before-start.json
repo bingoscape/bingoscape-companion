@@ -1,0 +1,44 @@
+{
+  "id": "44444444-4444-4444-8444-444444444444",
+  "eventId": "22222222-2222-4222-8222-222222222222",
+  "title": "Battleship Board",
+  "rows": 2,
+  "columns": 2,
+  "locked": false,
+  "visible": true,
+  "bingoType": "battleship",
+  "apiVersion": "2.1",
+  "tiles": [
+    {
+      "id": "cccccccc-0000-4000-8000-000000000001",
+      "bingoId": "44444444-4444-4444-8444-444444444444",
+      "title": "Tile 1",
+      "weight": 0,
+      "index": 0,
+      "tier": 0,
+      "isHidden": false,
+      "isBlind": true,
+      "tierLocked": false
+    },
+    {
+      "id": "cccccccc-0000-4000-8000-000000000002",
+      "bingoId": "44444444-4444-4444-8444-444444444444",
+      "title": "Tile 2",
+      "weight": 0,
+      "index": 1,
+      "tier": 0,
+      "isHidden": false,
+      "isBlind": true,
+      "tierLocked": false
+    }
+  ],
+  "battleship": {
+    "started": false,
+    "startDate": "2026-10-20T18:00:00Z",
+    "serverNow": "2026-10-13T10:00:00Z",
+    "rules": [ { "length": 3, "count": 2 }, { "length": 2, "count": 1 } ],
+    "marks": { "hitTileIds": [], "missTileIds": [], "sunkTileIds": [] },
+    "opponentShipsSunk": 0,
+    "opponentShipsTotal": 3
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "id": "44444444-4444-4444-8444-444444444444",
+  "eventId": "22222222-2222-4222-8222-222222222222",
+  "title": "Battleship Board",
+  "rows": 2,
+  "columns": 2,
+  "locked": false,
+  "visible": true,
+  "bingoType": "battleship",
+  "apiVersion": "2.1",
+  "tiles": [
+    {
+      "id": "cccccccc-0000-4000-8000-000000000001",
+      "bingoId": "44444444-4444-4444-8444-444444444444",
+      "title": "Zulrah",
+      "weight": 1,
+      "index": 0,
+      "tier": 0,
+      "isHidden": false,
+      "isBlind": false,
+      "tierLocked": false
+    },
+    {
+      "id": "cccccccc-0000-4000-8000-000000000002",
+      "bingoId": "44444444-4444-4444-8444-444444444444",
+      "title": "Vorkath",
+      "weight": 1,
+      "index": 1,
+      "tier": 0,
+      "isHidden": false,
+      "isBlind": false,
+      "tierLocked": false
+    },
+    {
+      "id": "cccccccc-0000-4000-8000-000000000003",
+      "bingoId": "44444444-4444-4444-8444-444444444444",
+      "title": "Hydra",
+      "weight": 1,
+      "index": 2,
+      "tier": 0,
+      "isHidden": false,
+      "isBlind": false,
+      "tierLocked": false
+    }
+  ],
+  "battleship": {
+    "started": true,
+    "startDate": "2026-10-10T18:00:00Z",
+    "serverNow": "2026-10-13T10:00:00Z",
+    "rules": [ { "length": 3, "count": 2 } ],
+    "marks": {
+      "hitTileIds": ["cccccccc-0000-4000-8000-000000000001"],
+      "missTileIds": ["cccccccc-0000-4000-8000-000000000002"],
+      "sunkTileIds": ["cccccccc-0000-4000-8000-000000000003"]
+    },
+    "opponentShipsSunk": 1,
+    "opponentShipsTotal": 3
+  }
+}
