@@ -76,15 +76,6 @@ final class BoardLayout {
         int width = Math.max(MIN_WIDTH, 2 * PAD + gridWidth);
         int height = 2 * PAD + headerHeight + gridHeight;
 
-        int buttonY = PAD + (TITLE_HEIGHT - BUTTON_SIZE) / 2;
-        Rectangle closeButton = new Rectangle(width - PAD - BUTTON_SIZE, buttonY, BUTTON_SIZE, BUTTON_SIZE);
-        Rectangle reloadButton = new Rectangle(closeButton.x - GAP - BUTTON_SIZE, buttonY, BUTTON_SIZE, BUTTON_SIZE);
-        Rectangle pinButton = new Rectangle(reloadButton.x - GAP - PIN_BUTTON_WIDTH, buttonY, PIN_BUTTON_WIDTH, BUTTON_SIZE);
-        Rectangle title = new Rectangle(PAD, PAD, Math.max(0, pinButton.x - GAP - PAD), TITLE_HEIGHT);
-        Rectangle codephrase = hasCodephrase
-                ? new Rectangle(PAD, PAD + TITLE_HEIGHT, width - 2 * PAD, CODEPHRASE_HEIGHT)
-                : null;
-
         int gridX = (width - gridWidth) / 2;
         int gridY = PAD + headerHeight;
         Rectangle gridArea = new Rectangle(gridX, gridY, gridWidth, gridHeight);
@@ -96,7 +87,27 @@ final class BoardLayout {
             tiles.add(new Rectangle(x, y, tileSize, tileSize));
         }
 
-        return new BoardLayout(effectiveRows, effectiveCols, width, height, tileSize, title, codephrase,
+        return withTiles(effectiveRows, effectiveCols, width, height, tileSize, hasCodephrase, gridArea, tiles);
+    }
+
+    /**
+     * Builds a layout from explicit tile rectangles, for boards that are not a regular grid. The header
+     * controls are placed like in {@link #compute}; {@code tiles} are in tile order and may differ in size,
+     * must not overlap, and must lie inside {@code gridArea}. The list is
+     * used as is, not copied, so callers must not modify it afterwards.
+     */
+    static BoardLayout withTiles(int rows, int cols, int width, int height, int tileSize, boolean hasCodephrase,
+                                 Rectangle gridArea, List<Rectangle> tiles) {
+        int buttonY = PAD + (TITLE_HEIGHT - BUTTON_SIZE) / 2;
+        Rectangle closeButton = new Rectangle(width - PAD - BUTTON_SIZE, buttonY, BUTTON_SIZE, BUTTON_SIZE);
+        Rectangle reloadButton = new Rectangle(closeButton.x - GAP - BUTTON_SIZE, buttonY, BUTTON_SIZE, BUTTON_SIZE);
+        Rectangle pinButton = new Rectangle(reloadButton.x - GAP - PIN_BUTTON_WIDTH, buttonY, PIN_BUTTON_WIDTH, BUTTON_SIZE);
+        Rectangle title = new Rectangle(PAD, PAD, Math.max(0, pinButton.x - GAP - PAD), TITLE_HEIGHT);
+        Rectangle codephrase = hasCodephrase
+                ? new Rectangle(PAD, PAD + TITLE_HEIGHT, width - 2 * PAD, CODEPHRASE_HEIGHT)
+                : null;
+
+        return new BoardLayout(rows, cols, width, height, tileSize, title, codephrase,
                 pinButton, reloadButton, closeButton, gridArea, Collections.unmodifiableList(tiles));
     }
 
@@ -108,19 +119,13 @@ final class BoardLayout {
             return -1;
         }
 
-        int step = tileSize + GAP;
-        int dx = x - gridArea.x;
-        int dy = y - gridArea.y;
-        if (dx % step >= tileSize || dy % step >= tileSize) {
-            return -1;
+        // Plain loop over the rectangles: works for any arrangement and allocates nothing
+        for (int i = 0; i < tiles.size(); i++) {
+            if (tiles.get(i).contains(x, y)) {
+                return i;
+            }
         }
-
-        int col = dx / step;
-        int row = dy / step;
-        if (col >= cols || row >= rows) {
-            return -1;
-        }
-        return row * cols + col;
+        return -1;
     }
 
     Button buttonAt(int x, int y) {

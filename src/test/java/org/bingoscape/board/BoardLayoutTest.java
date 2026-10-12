@@ -3,6 +3,8 @@ package org.bingoscape.board;
 import org.junit.Test;
 
 import java.awt.Rectangle;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -94,5 +96,90 @@ public class BoardLayoutTest {
         assertEquals(BoardLayout.MIN_WIDTH, layout.width);
         Rectangle grid = layout.gridArea;
         assertEquals(layout.width - grid.x - grid.width, grid.x);
+    }
+
+    @Test
+    public void tileIndexAtMatchesRowMajorGridMath() {
+        BoardLayout layout = BoardLayout.compute(4, 5, 20, FIXED_WIDTH, FIXED_HEIGHT, 1.0, true);
+        Rectangle grid = layout.gridArea;
+        int step = layout.tileSize + BoardLayout.GAP;
+
+        // Every pixel of the grid and a margin around it must agree with the old arithmetic
+        for (int y = grid.y - 3; y < grid.y + grid.height + 3; y++) {
+            for (int x = grid.x - 3; x < grid.x + grid.width + 3; x++) {
+                assertEquals("at " + x + "," + y, rowMajorIndex(layout, step, x, y), layout.tileIndexAt(x, y));
+            }
+        }
+    }
+
+    @Test
+    public void raggedLastRowOnlyHitsExistingCells() {
+        // Three columns, last row has two tiles: the free third cell is a gap, not a tile
+        int size = 40;
+        List<Rectangle> tiles = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            tiles.add(new Rectangle(20 + (i % 3) * (size + 4), 50 + (i / 3) * (size + 4), size, size));
+        }
+        BoardLayout layout = BoardLayout.withTiles(3, 3, 240, 200, size, false,
+                new Rectangle(20, 50, 3 * size + 8, 3 * size + 8), tiles);
+
+        assertEquals(7, layout.tileIndexAt(20 + (size + 4) + 1, 50 + 2 * (size + 4) + 1));
+        assertEquals(-1, layout.tileIndexAt(20 + 2 * (size + 4) + 1, 50 + 2 * (size + 4) + 1));
+        assertEquals(5, layout.tileIndexAt(20 + 2 * (size + 4) + 1, 50 + (size + 4) + 1));
+    }
+
+    @Test
+    public void irregularRectanglesAreHitByPosition() {
+        // Tiles of different sizes in a non-grid arrangement, as tiered boards will produce
+        List<Rectangle> tiles = new ArrayList<>();
+        tiles.add(new Rectangle(10, 40, 100, 30));
+        tiles.add(new Rectangle(10, 80, 40, 60));
+        tiles.add(new Rectangle(60, 80, 50, 25));
+        tiles.add(new Rectangle(60, 115, 50, 25));
+        BoardLayout layout = BoardLayout.withTiles(3, 2, 200, 160, 40, false, new Rectangle(10, 40, 100, 100), tiles);
+
+        assertEquals(0, layout.tileIndexAt(109, 69));
+        assertEquals(1, layout.tileIndexAt(10, 139));
+        assertEquals(2, layout.tileIndexAt(60, 80));
+        assertEquals(3, layout.tileIndexAt(109, 139));
+        // Gaps between tiles and the area right of the narrow tile
+        assertEquals(-1, layout.tileIndexAt(55, 100));
+        assertEquals(-1, layout.tileIndexAt(80, 108));
+        assertEquals(-1, layout.tileIndexAt(50, 75));
+        // Inside the grid area but outside every rectangle, and outside the area entirely
+        assertEquals(-1, layout.tileIndexAt(110, 100));
+        assertEquals(-1, layout.tileIndexAt(5, 45));
+        assertEquals(-1, layout.tileIndexAt(10, 140));
+    }
+
+    @Test
+    public void withTilesPlacesHeaderControlsLikeCompute() {
+        BoardLayout computed = BoardLayout.compute(3, 3, 9, 1920, 1080, 1.0, true);
+        BoardLayout custom = BoardLayout.withTiles(3, 3, computed.width, computed.height, computed.tileSize, true,
+                computed.gridArea, computed.tiles);
+
+        assertEquals(computed.title, custom.title);
+        assertEquals(computed.codephrase, custom.codephrase);
+        assertEquals(computed.pinButton, custom.pinButton);
+        assertEquals(computed.reloadButton, custom.reloadButton);
+        assertEquals(computed.closeButton, custom.closeButton);
+    }
+
+    private static int rowMajorIndex(BoardLayout layout, int step, int x, int y) {
+        Rectangle grid = layout.gridArea;
+        if (!grid.contains(x, y)) {
+            return -1;
+        }
+        int dx = x - grid.x;
+        int dy = y - grid.y;
+        if (dx % step >= layout.tileSize || dy % step >= layout.tileSize) {
+            return -1;
+        }
+        int col = dx / step;
+        int row = dy / step;
+        if (col >= layout.cols || row >= layout.rows) {
+            return -1;
+        }
+        return row * layout.cols + col;
     }
 }
