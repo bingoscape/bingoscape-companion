@@ -6,6 +6,7 @@ import org.bingoscape.models.Bingo;
 import org.bingoscape.models.Goal;
 import org.bingoscape.models.GoalTreeNode;
 import org.bingoscape.models.Tile;
+import org.bingoscape.models.TileSubmissionType;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -248,8 +249,8 @@ public class TileRequirementMatcher {
     /**
      * Checks if a tile has already been approved (to avoid re-submitting).
      */
-    private boolean isTileApproved(Tile tile) {
-        return tile.getSubmission() != null && "approved".equals(tile.getSubmission().getStatus());
+    static boolean isTileApproved(Tile tile) {
+        return tile.getSubmission() != null && tile.getSubmission().getStatus() == TileSubmissionType.ACCEPTED;
     }
 
     /**
