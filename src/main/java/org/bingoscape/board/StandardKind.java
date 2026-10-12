@@ -31,7 +31,7 @@ final class StandardKind implements BoardKind {
     }
 
     @Override
-    public TileView view(Bingo bingo, Tile tile, int index) {
+    public TileView view(Bingo bingo, Tile tile, int index, Object prepared) {
         return TileView.of(tile, index);
     }
 

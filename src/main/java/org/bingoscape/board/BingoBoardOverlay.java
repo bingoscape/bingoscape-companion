@@ -96,8 +96,10 @@ public class BingoBoardOverlay extends Overlay {
             return null;
         }
 
-        if (bingo != lastBingo) {
-            rebuildModel(bingo);
+        // Kinds are singletons, so a changed option (e.g. how locked tiles show) yields a different instance
+        BoardKind kind = BoardKind.forBingo(bingo).withOptions(config);
+        if (bingo != lastBingo || kind != model.kind) {
+            rebuildModel(bingo, kind);
         }
 
         if (state.isReloading() && System.currentTimeMillis() - state.getReloadStartedAtMs() > RELOAD_TIMEOUT_MS) {
@@ -105,7 +107,6 @@ public class BingoBoardOverlay extends Overlay {
         }
 
         boolean hasCodephrase = bingo.getCodephrase() != null && !bingo.getCodephrase().trim().isEmpty();
-        BoardKind kind = model.kind;
         BoardLayout layout = kind.layout(model, client.getCanvasWidth(), client.getCanvasHeight(),
                 config.boardScale() / 100.0, hasCodephrase);
 
@@ -134,8 +135,9 @@ public class BingoBoardOverlay extends Overlay {
             TileDetailsView.DetailsHit details = null;
             int hoveredTile = -1;
             if (detailsTile != null) {
-                details = TileDetailsView.paint(g, layout.gridArea, detailsTile, bingo,
-                        kind.canSubmit(detailsView, bingo), config.boardShowTileImages() ? images : null,
+                details = TileDetailsView.paint(g, layout.gridArea, detailsTile, kind.primaryLabel(detailsView, bingo),
+                        kind.canSubmit(detailsView, bingo), kind.detailsNotice(detailsView),
+                        config.boardShowTileImages() ? images : null,
                         itemManager::getImage,
                         state.getDetailsScrollPx(), mouse);
                 if (state.getDetailsScrollPx() > details.maxScroll) {
@@ -155,8 +157,8 @@ public class BingoBoardOverlay extends Overlay {
         return new Dimension(layout.width, layout.height);
     }
 
-    private void rebuildModel(Bingo bingo) {
-        model = BoardModel.of(bingo);
+    private void rebuildModel(Bingo bingo, BoardKind kind) {
+        model = BoardModel.of(bingo, kind);
         lastBingo = bingo;
         painter.reset();
 

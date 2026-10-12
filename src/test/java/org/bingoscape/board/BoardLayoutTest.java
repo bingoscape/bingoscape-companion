@@ -165,6 +165,31 @@ public class BoardLayoutTest {
         assertEquals(computed.closeButton, custom.closeButton);
     }
 
+    @Test
+    public void withTilesKeepsLegendAndSectionHeaders() {
+        List<Rectangle> tiles = new ArrayList<>();
+        tiles.add(new Rectangle(10, 60, 40, 40));
+        Rectangle legend = new Rectangle(10, 30, 100, 14);
+        List<Rectangle> sections = new ArrayList<>();
+        sections.add(new Rectangle(10, 44, 100, 16));
+        BoardLayout layout = BoardLayout.withTiles(1, 1, 200, 160, 40, false, new Rectangle(10, 44, 100, 60), tiles,
+                legend, sections);
+
+        assertEquals(legend, layout.legend);
+        assertEquals(sections, layout.sections);
+        // Headers are inside the grid area but are not tiles
+        assertEquals(-1, layout.tileIndexAt(20, 50));
+        assertEquals(0, layout.tileIndexAt(20, 70));
+    }
+
+    @Test
+    public void plainGridHasNoLegendOrSections() {
+        BoardLayout layout = BoardLayout.compute(3, 3, 9, 1920, 1080, 1.0, false);
+
+        assertNull(layout.legend);
+        assertTrue(layout.sections.isEmpty());
+    }
+
     private static int rowMajorIndex(BoardLayout layout, int step, int x, int y) {
         Rectangle grid = layout.gridArea;
         if (!grid.contains(x, y)) {

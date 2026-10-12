@@ -38,10 +38,14 @@ final class BoardLayout {
     final Rectangle closeButton;
     final Rectangle gridArea;
     final List<Rectangle> tiles;
+    /** Legend line between the header and the grid, or null when the board has none. */
+    final Rectangle legend;
+    /** Header rectangles of the board's sections (tier bands), in section order; empty for plain grids. */
+    final List<Rectangle> sections;
 
     private BoardLayout(int rows, int cols, int width, int height, int tileSize, Rectangle title, Rectangle codephrase,
                         Rectangle pinButton, Rectangle reloadButton, Rectangle closeButton, Rectangle gridArea,
-                        List<Rectangle> tiles) {
+                        List<Rectangle> tiles, Rectangle legend, List<Rectangle> sections) {
         this.rows = rows;
         this.cols = cols;
         this.width = width;
@@ -54,6 +58,8 @@ final class BoardLayout {
         this.closeButton = closeButton;
         this.gridArea = gridArea;
         this.tiles = tiles;
+        this.legend = legend;
+        this.sections = sections;
     }
 
     static BoardLayout compute(int rows, int cols, int tileCount, int viewportWidth, int viewportHeight,
@@ -98,6 +104,17 @@ final class BoardLayout {
      */
     static BoardLayout withTiles(int rows, int cols, int width, int height, int tileSize, boolean hasCodephrase,
                                  Rectangle gridArea, List<Rectangle> tiles) {
+        return withTiles(rows, cols, width, height, tileSize, hasCodephrase, gridArea, tiles, null,
+                Collections.<Rectangle>emptyList());
+    }
+
+    /**
+     * Like {@link #withTiles(int, int, int, int, int, boolean, Rectangle, List)}, plus an optional legend line
+     * and section header rectangles (which should lie inside {@code gridArea}) for boards split into sections.
+     */
+    static BoardLayout withTiles(int rows, int cols, int width, int height, int tileSize, boolean hasCodephrase,
+                                 Rectangle gridArea, List<Rectangle> tiles, Rectangle legend,
+                                 List<Rectangle> sections) {
         int buttonY = PAD + (TITLE_HEIGHT - BUTTON_SIZE) / 2;
         Rectangle closeButton = new Rectangle(width - PAD - BUTTON_SIZE, buttonY, BUTTON_SIZE, BUTTON_SIZE);
         Rectangle reloadButton = new Rectangle(closeButton.x - GAP - BUTTON_SIZE, buttonY, BUTTON_SIZE, BUTTON_SIZE);
@@ -108,7 +125,8 @@ final class BoardLayout {
                 : null;
 
         return new BoardLayout(rows, cols, width, height, tileSize, title, codephrase,
-                pinButton, reloadButton, closeButton, gridArea, Collections.unmodifiableList(tiles));
+                pinButton, reloadButton, closeButton, gridArea, Collections.unmodifiableList(tiles), legend,
+                Collections.unmodifiableList(sections));
     }
 
     /**
