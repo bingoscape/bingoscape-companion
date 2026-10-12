@@ -207,4 +207,29 @@ public class BoardLayoutTest {
         }
         return row * layout.cols + col;
     }
+
+    @Test
+    public void legendReservesALineBetweenHeaderAndGrid() {
+        BoardLayout plain = BoardLayout.compute(3, 3, 9, 2560, 1440, 1.0, true);
+        BoardLayout legend = BoardLayout.compute(3, 3, 9, 2560, 1440, 1.0, true, true);
+
+        assertNull(plain.legend);
+        assertEquals(plain.tileSize, legend.tileSize);
+        int block = BoardLayout.LEGEND_HEIGHT + BoardLayout.LEGEND_SPACING;
+        assertEquals(plain.height + block, legend.height);
+        assertEquals(plain.gridArea.y + block, legend.gridArea.y);
+        assertEquals(legend.codephrase.y + legend.codephrase.height, legend.legend.y - BoardLayout.HEADER_SPACING);
+        assertEquals(BoardLayout.LEGEND_HEIGHT, legend.legend.height);
+        assertEquals(legend.width - 2 * BoardLayout.PAD, legend.legend.width);
+        assertTrue(legend.legend.y + legend.legend.height <= legend.gridArea.y);
+    }
+
+    @Test
+    public void legendLayoutStillFitsTheViewport() {
+        BoardLayout layout = BoardLayout.compute(5, 5, 25, FIXED_WIDTH, FIXED_HEIGHT, 1.0, true, true);
+
+        assertTrue(layout.height <= FIXED_HEIGHT * BoardLayout.VIEWPORT_FILL);
+        assertEquals(layout.gridArea.y + layout.gridArea.height + BoardLayout.PAD, layout.height);
+    }
+
 }

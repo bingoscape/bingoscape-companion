@@ -19,6 +19,8 @@ final class BoardLayout {
     static final int DEFAULT_GRID_SIZE = 5;
     static final int BUTTON_SIZE = 20;
     static final int PIN_BUTTON_WIDTH = 44;
+    static final int LEGEND_HEIGHT = 14;
+    static final int LEGEND_SPACING = 4;
     static final int MIN_WIDTH = 240;
     static final double VIEWPORT_FILL = 0.9;
 
@@ -64,14 +66,24 @@ final class BoardLayout {
 
     static BoardLayout compute(int rows, int cols, int tileCount, int viewportWidth, int viewportHeight,
                                double scale, boolean hasCodephrase) {
+        return compute(rows, cols, tileCount, viewportWidth, viewportHeight, scale, hasCodephrase, false);
+    }
+
+    /**
+     * Like the plain grid, but with {@code withLegend} a {@link #LEGEND_HEIGHT} line is reserved between the
+     * header and the grid and exposed as {@link #legend}.
+     */
+    static BoardLayout compute(int rows, int cols, int tileCount, int viewportWidth, int viewportHeight,
+                               double scale, boolean hasCodephrase, boolean withLegend) {
         int effectiveCols = cols <= 0 ? DEFAULT_GRID_SIZE : cols;
         int effectiveRows = rows <= 0 ? DEFAULT_GRID_SIZE : rows;
         // Like GridLayout, grow the grid when there are more tiles than cells
         effectiveRows = Math.max(effectiveRows, (tileCount + effectiveCols - 1) / effectiveCols);
 
         int headerHeight = TITLE_HEIGHT + (hasCodephrase ? CODEPHRASE_HEIGHT : 0) + HEADER_SPACING;
+        int legendBlock = withLegend ? LEGEND_HEIGHT + LEGEND_SPACING : 0;
         int availableWidth = (int) (viewportWidth * VIEWPORT_FILL) - 2 * PAD;
-        int availableHeight = (int) (viewportHeight * VIEWPORT_FILL) - 2 * PAD - headerHeight;
+        int availableHeight = (int) (viewportHeight * VIEWPORT_FILL) - 2 * PAD - headerHeight - legendBlock;
         int fitWidth = (availableWidth - (effectiveCols - 1) * GAP) / effectiveCols;
         int fitHeight = (availableHeight - (effectiveRows - 1) * GAP) / effectiveRows;
         int preferred = (int) Math.round(TILE_DEFAULT * scale);
@@ -80,10 +92,10 @@ final class BoardLayout {
         int gridWidth = effectiveCols * tileSize + (effectiveCols - 1) * GAP;
         int gridHeight = effectiveRows * tileSize + (effectiveRows - 1) * GAP;
         int width = Math.max(MIN_WIDTH, 2 * PAD + gridWidth);
-        int height = 2 * PAD + headerHeight + gridHeight;
+        int height = 2 * PAD + headerHeight + legendBlock + gridHeight;
 
         int gridX = (width - gridWidth) / 2;
-        int gridY = PAD + headerHeight;
+        int gridY = PAD + headerHeight + legendBlock;
         Rectangle gridArea = new Rectangle(gridX, gridY, gridWidth, gridHeight);
 
         List<Rectangle> tiles = new ArrayList<>(effectiveRows * effectiveCols);
@@ -93,7 +105,11 @@ final class BoardLayout {
             tiles.add(new Rectangle(x, y, tileSize, tileSize));
         }
 
-        return withTiles(effectiveRows, effectiveCols, width, height, tileSize, hasCodephrase, gridArea, tiles);
+        Rectangle legend = withLegend
+                ? new Rectangle(PAD, PAD + headerHeight, width - 2 * PAD, LEGEND_HEIGHT)
+                : null;
+        return withTiles(effectiveRows, effectiveCols, width, height, tileSize, hasCodephrase, gridArea, tiles,
+                legend, Collections.<Rectangle>emptyList());
     }
 
     /**
