@@ -76,11 +76,12 @@ final class TileDetailsView {
     }
 
     /**
+     * @param canSubmit  whether the board kind allows submitting this tile (enables the primary button)
      * @param images     image cache, or null when tile images are disabled
      * @param itemImages item id to item sprite (RuneLite ItemManager)
      */
-    static DetailsHit paint(Graphics2D g, Rectangle area, Tile tile, Bingo bingo, TileImageCache images,
-                            IntFunction<BufferedImage> itemImages, int scrollPx, Point mouse) {
+    static DetailsHit paint(Graphics2D g, Rectangle area, Tile tile, Bingo bingo, boolean canSubmit,
+                            TileImageCache images, IntFunction<BufferedImage> itemImages, int scrollPx, Point mouse) {
         g.setColor(ColorScheme.DARKER_GRAY_COLOR);
         g.fillRect(area.x, area.y, area.width, area.height);
         g.setColor(ColorScheme.BORDER_COLOR);
@@ -92,7 +93,7 @@ final class TileDetailsView {
         g.setFont(FontManager.getRunescapeSmallFont());
         FontMetrics buttonFm = g.getFontMetrics();
         String primaryText = primaryLabel(tile, bingo);
-        boolean enabled = primaryEnabled(tile, bingo);
+        boolean enabled = canSubmit;
         int buttonY = inner.y + inner.height - BUTTON_HEIGHT;
         int primaryWidth = buttonFm.stringWidth(primaryText) + 16;
         Rectangle primary = new Rectangle(inner.x + inner.width - primaryWidth, buttonY, primaryWidth, BUTTON_HEIGHT);

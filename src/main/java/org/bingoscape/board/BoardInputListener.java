@@ -94,9 +94,9 @@ public class BoardInputListener implements MouseListener, MouseWheelListener, Ke
             return;
         }
 
-        Tile tile = hitMap.tileAt(p.x, p.y);
-        if (tile != null && !tile.isHidden() && tile.getId() != null) {
-            state.openDetails(tile.getId());
+        TileView view = hitMap.viewAt(p.x, p.y);
+        if (view != null && hitMap.kind.canOpen(view)) {
+            state.openDetails(view.id);
         }
     }
 
