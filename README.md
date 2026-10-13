@@ -1,5 +1,7 @@
 # BingoScape
 
+[![CI](https://github.com/bingoscape/bingoscape-companion/actions/workflows/ci.yml/badge.svg)](https://github.com/bingoscape/bingoscape-companion/actions/workflows/ci.yml)
+
 A RuneLite plugin for participating in Bingo events with your clan or friends in Old School RuneScape.
 
 ## Features
@@ -66,6 +68,16 @@ BingoScape allows you to:
 - Track event progress
 
 Visit [next.bingoscape.org](https://next.bingoscape.org) to set up your own bingo events.
+
+## Development
+
+Build and run the tests with JDK 11 or newer:
+
+```
+./gradlew build
+```
+
+Pull requests and pushes to `master` are checked by the [CI workflow](.github/workflows/ci.yml), which runs the same command.
 
 ## Acknowledgments
 
