@@ -270,4 +270,53 @@ public class TeamDropPollerTest {
         assertEquals(7, n.getPoints());
         assertEquals("Team", n.getTeamName());
     }
+
+    @Test
+    public void battleshipCompletionsGetNoGenericPopupButStillRefreshTheBoard() {
+        poller.applyCompletions(null, completions("c1"), "ship", "ship");
+        TeamDropPoller.CompletionBatch batch = poller.applyCompletions("c1",
+                completions("c2", completion("1", "t", "ship"), completion("2", "t", "other")), "ship", "ship");
+
+        assertTrue(batch.refreshBoard);
+        assertEquals(1, batch.shown.size());
+        assertEquals("other", batch.shown.get(0).getBingoId());
+    }
+
+    @Test
+    public void battleshipCompletionsAreStillRecordedAsSeen() {
+        poller.applyCompletions(null, completions("c1"), "ship", "ship");
+        assertTrue(poller.applyCompletions("c1", completions("c2", completion("1", "t", "ship")), "ship", "ship").shown.isEmpty());
+        assertEquals("c2", poller.getCompletionCursor());
+
+        // Switching the shown board to a standard one does not replay the old completion
+        assertTrue(poller.applyCompletions("c2", completions("c3", completion("1", "t", "ship")), "other", null).shown.isEmpty());
+    }
+
+    @Test
+    public void otherBoardTypesKeepTheirCompletionPopups() {
+        poller.applyCompletions(null, completions("c1"), "b", null);
+        assertEquals(1, poller.applyCompletions("c1", completions("c2", completion("1", "t", "b")), "b", null).shown.size());
+        // The three argument form behaves as before
+        assertEquals(1, poller.applyCompletions("c2", completions("c3", completion("2", "t", "b")), "b").shown.size());
+    }
+
+    @Test
+    public void battleshipSuppressionOnlyMatchesTheShownBattleshipBingo() {
+        poller.applyCompletions(null, completions("c1"), "b", "ship");
+        TeamDropPoller.CompletionBatch batch = poller.applyCompletions("c1",
+                completions("c2", completion("1", "t", "b")), "b", "ship");
+
+        assertTrue(batch.refreshBoard);
+        assertEquals(1, batch.shown.size());
+    }
+
+    @Test
+    public void suppressedCompletionsDoNotUseUpThePopupCap() {
+        poller.applyCompletions(null, completions("c1"), "ship", "ship");
+        TeamDropPoller.CompletionBatch batch = poller.applyCompletions("c1", completions("c2",
+                completion("1", "t", "ship"), completion("2", "t", "ship"), completion("3", "t", "ship"),
+                completion("4", "t", "ship"), completion("5", "t", "x")), "ship", "ship");
+
+        assertEquals(1, batch.shown.size());
+    }
 }

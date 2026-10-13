@@ -2,6 +2,7 @@ package org.bingoscape;
 
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
+import org.bingoscape.board.TileGate;
 import org.bingoscape.models.*;
 import org.bingoscape.ui.TileStatusStyle;
 
@@ -210,8 +211,19 @@ public class BingoBoardWindow extends JFrame {
             for (Tile tile : bingo.getTiles()) {
                 // Skip hidden tiles
                 if (tile.isHidden()) {
-                    JPanel hiddenPanel = createHiddenTilePanel();
+                    JPanel hiddenPanel = createHiddenTilePanel("?", "Hidden tile");
                     bingoBoard.add(hiddenPanel);
+                    continue;
+                }
+
+                // Blind tiles and the stubs of locked tiers have no content to show
+                if (tile.isBlind()) {
+                    bingoBoard.add(createHiddenTilePanel("?", "Blind tile: revealed when the event starts"));
+                    continue;
+                }
+                if (tile.isTierLocked()) {
+                    String notice = TileGate.notice(currentBingo, tile);
+                    bingoBoard.add(createHiddenTilePanel("Locked", notice == null ? "Tier locked" : notice));
                     continue;
                 }
 
@@ -224,7 +236,7 @@ public class BingoBoardWindow extends JFrame {
         });
     }
 
-    private JPanel createHiddenTilePanel() {
+    private JPanel createHiddenTilePanel(String text, String tooltip) {
         // Calculate tile size based on board dimensions
         int rows = currentBingo.getRows() > 0 ? currentBingo.getRows() : 5;
         int cols = currentBingo.getColumns() > 0 ? currentBingo.getColumns() : 5;
@@ -242,12 +254,12 @@ public class BingoBoardWindow extends JFrame {
                 new EmptyBorder(4, 4, 4, 4)
         ));
 
-        JLabel hiddenLabel = new JLabel("?", SwingConstants.CENTER);
+        JLabel hiddenLabel = new JLabel(text, SwingConstants.CENTER);
         hiddenLabel.setForeground(Color.GRAY);
-        hiddenLabel.setFont(new Font(hiddenLabel.getFont().getName(), Font.BOLD, 24));
+        hiddenLabel.setFont(new Font(hiddenLabel.getFont().getName(), Font.BOLD, text.length() > 1 ? 12 : 24));
         panel.add(hiddenLabel, BorderLayout.CENTER);
 
-        panel.setToolTipText("Hidden tile");
+        panel.setToolTipText(tooltip);
         return panel;
     }
 
@@ -430,7 +442,9 @@ public class BingoBoardWindow extends JFrame {
 
             @Override
             public void mouseClicked(java.awt.event.MouseEvent evt) {
-                showSubmissionDialog(tile);
+                if (TileGate.canOpen(currentBingo, tile)) {
+                    showSubmissionDialog(tile);
+                }
             }
 
             @Override
@@ -781,6 +795,12 @@ public class BingoBoardWindow extends JFrame {
 
         if (currentBingo.isLocked()) {
             submitButton.setText("Submissions locked");
+            submitButton.setEnabled(false);
+        }
+
+        // Tier locks, blind tiles and a battleship event that has not started yet
+        if (!TileGate.canSubmit(currentBingo, tile)) {
+            submitButton.setText(TileGate.submitLabel(currentBingo, tile));
             submitButton.setEnabled(false);
         }
 

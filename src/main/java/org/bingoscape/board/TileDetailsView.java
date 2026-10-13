@@ -76,11 +76,15 @@ final class TileDetailsView {
     }
 
     /**
+     * @param primaryText label of the primary button, from the board kind
+     * @param canSubmit  whether the board kind allows submitting this tile (enables the primary button)
+     * @param notice     extra line under the title (why a tile is locked), or null
      * @param images     image cache, or null when tile images are disabled
      * @param itemImages item id to item sprite (RuneLite ItemManager)
      */
-    static DetailsHit paint(Graphics2D g, Rectangle area, Tile tile, Bingo bingo, TileImageCache images,
-                            IntFunction<BufferedImage> itemImages, int scrollPx, Point mouse) {
+    static DetailsHit paint(Graphics2D g, Rectangle area, Tile tile, String primaryText, boolean canSubmit,
+                            String notice, TileImageCache images, IntFunction<BufferedImage> itemImages,
+                            int scrollPx, Point mouse) {
         g.setColor(ColorScheme.DARKER_GRAY_COLOR);
         g.fillRect(area.x, area.y, area.width, area.height);
         g.setColor(ColorScheme.BORDER_COLOR);
@@ -91,8 +95,7 @@ final class TileDetailsView {
         // Footer buttons
         g.setFont(FontManager.getRunescapeSmallFont());
         FontMetrics buttonFm = g.getFontMetrics();
-        String primaryText = primaryLabel(tile, bingo);
-        boolean enabled = primaryEnabled(tile, bingo);
+        boolean enabled = canSubmit;
         int buttonY = inner.y + inner.height - BUTTON_HEIGHT;
         int primaryWidth = buttonFm.stringWidth(primaryText) + 16;
         Rectangle primary = new Rectangle(inner.x + inner.width - primaryWidth, buttonY, primaryWidth, BUTTON_HEIGHT);
@@ -123,7 +126,7 @@ final class TileDetailsView {
         try {
             cg.clipRect(column.x, column.y, column.width, column.height);
             cg.translate(0, -scrollPx);
-            contentHeight = paintContent(cg, column.x, column.y, textWidth, tile, itemImages) - column.y;
+            contentHeight = paintContent(cg, column.x, column.y, textWidth, tile, notice, itemImages) - column.y;
         } finally {
             cg.dispose();
         }
@@ -139,14 +142,24 @@ final class TileDetailsView {
     /**
      * Paints the text content starting at {@code y} and returns the y coordinate below the last line.
      */
-    private static int paintContent(Graphics2D g, int x, int y, int width, Tile tile, IntFunction<BufferedImage> itemImages) {
-        // Title
+    private static int paintContent(Graphics2D g, int x, int y, int width, Tile tile, String notice,
+                                    IntFunction<BufferedImage> itemImages) {
+        // Title; locked stubs have none
         g.setFont(FontManager.getRunescapeBoldFont());
-        y = paintWrapped(g, tile.getTitle(), x, y, width, Color.WHITE);
+        String title = tile.getTitle() != null ? tile.getTitle() : tile.isTierLocked() ? "Locked tile" : "";
+        y = paintWrapped(g, title, x, y, width, Color.WHITE);
 
-        // XP
+        if (notice != null) {
+            g.setFont(FontManager.getRunescapeFont());
+            y = paintWrapped(g, notice, x, y + 2, width, BoardTooltipBuilder.GOLD);
+        }
+
+        // XP; a locked stub does not carry one
         g.setFont(FontManager.getRunescapeFont());
-        y = paintWrapped(g, "XP: " + tile.getWeight(), x, y + 2, width, Color.LIGHT_GRAY) + 6;
+        if (!tile.isTierLocked()) {
+            y = paintWrapped(g, "XP: " + tile.getWeight(), x, y + 2, width, Color.LIGHT_GRAY);
+        }
+        y += 6;
 
         // Description
         if (tile.getDescription() != null && !tile.getDescription().trim().isEmpty()) {

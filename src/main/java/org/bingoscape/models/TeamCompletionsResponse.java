@@ -31,6 +31,6 @@ public class TeamCompletionsResponse {
     @Data
     public static class Tile {
         private int points;
-        private String tier;
+        private int tier;
     }
 }

@@ -113,6 +113,16 @@ public interface BingoScapeConfig extends Config {
         return true;
     }
 
+    @ConfigItem(keyName = "progressionShowLockedTiles", name = "Locked Tier Tiles", description = "How tiles of locked progression tiers are shown: dimmed with a lock, or hidden so only the tier header remains", section = boardSection, position = 7)
+    default LockedTileDisplay progressionShowLockedTiles() {
+        return LockedTileDisplay.DIM;
+    }
+
+    @ConfigItem(keyName = "battleshipShowMarkers", name = "Battleship Marks", description = "Show your team's hit, miss and sunk marks on battleship boards", section = boardSection, position = 8)
+    default boolean battleshipShowMarkers() {
+        return true;
+    }
+
     @ConfigSection(name = "Notifications", description = "Drop popup settings", position = 10)
     String notificationSection = "notifications";
 
@@ -173,5 +183,20 @@ public interface BingoScapeConfig extends Config {
     @ConfigItem(keyName = "tileCompletedSound", name = "Tile Completed Sound", description = "Play a sound when your team completes a bingo tile", section = notificationSection, position = 10)
     default boolean tileCompletedSound() {
         return true;
+    }
+
+    @ConfigItem(keyName = "showTierUnlockNotifications", name = "Show Tier Unlocks", description = "Show a popup when your team unlocks a tier on a progression board. Requires the drop popup to be enabled", section = notificationSection, position = 11)
+    default boolean showTierUnlockNotifications() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "showBattleshipNotifications", name = "Show Battleship Shots", description = "Show a popup for each hit, miss and sunk ship of your team on a battleship board. Requires the drop popup to be enabled", section = notificationSection, position = 12)
+    default boolean showBattleshipNotifications() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "battleshipSound", name = "Battleship Sound", description = "Play a sound when your team's shot on a battleship board hits, misses or sinks a ship", section = notificationSection, position = 13)
+    default boolean battleshipSound() {
+        return false;
     }
 }

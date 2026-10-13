@@ -1,0 +1,50 @@
+{
+  "id": "33333333-3333-4333-8333-333333333333",
+  "eventId": "22222222-2222-4222-8222-222222222222",
+  "title": "Progression Board",
+  "rows": 2,
+  "columns": 2,
+  "locked": false,
+  "visible": true,
+  "bingoType": "progression",
+  "apiVersion": "2.1",
+  "tiles": [
+    {
+      "id": "bbbbbbbb-0000-4000-8000-000000000001",
+      "bingoId": "33333333-3333-4333-8333-333333333333",
+      "title": "Tier 0 tile",
+      "weight": 5,
+      "index": 0,
+      "tier": 0,
+      "isHidden": false,
+      "isBlind": false,
+      "tierLocked": false
+    },
+    {
+      "id": "bbbbbbbb-0000-4000-8000-000000000003",
+      "index": 2,
+      "tier": 1,
+      "tierLocked": true
+    },
+    {
+      "id": "bbbbbbbb-0000-4000-8000-000000000004",
+      "index": 3,
+      "tier": 1,
+      "tierLocked": true
+    }
+  ],
+  "progression": {
+    "tierXpRequirements": [
+      { "tier": 0, "xpRequired": 5 },
+      { "tier": 1, "xpRequired": 5 }
+    ],
+    "unlockedTiers": [0],
+    "tierProgress": [
+      { "tier": 0, "isUnlocked": true, "unlockedAt": "2026-10-01T12:00:00Z" }
+    ],
+    "tiers": [
+      { "tier": 0, "isUnlocked": true, "unlockedAt": "2026-10-01T12:00:00Z", "earnedXp": 2, "xpRequired": 5 },
+      { "tier": 1, "isUnlocked": false, "unlockedAt": null, "earnedXp": 0, "xpRequired": 5 }
+    ]
+  }
+}

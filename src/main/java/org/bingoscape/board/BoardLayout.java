@@ -19,6 +19,8 @@ final class BoardLayout {
     static final int DEFAULT_GRID_SIZE = 5;
     static final int BUTTON_SIZE = 20;
     static final int PIN_BUTTON_WIDTH = 44;
+    static final int LEGEND_HEIGHT = 14;
+    static final int LEGEND_SPACING = 4;
     static final int MIN_WIDTH = 240;
     static final double VIEWPORT_FILL = 0.9;
 
@@ -38,10 +40,14 @@ final class BoardLayout {
     final Rectangle closeButton;
     final Rectangle gridArea;
     final List<Rectangle> tiles;
+    /** Legend line between the header and the grid, or null when the board has none. */
+    final Rectangle legend;
+    /** Header rectangles of the board's sections (tier bands), in section order; empty for plain grids. */
+    final List<Rectangle> sections;
 
     private BoardLayout(int rows, int cols, int width, int height, int tileSize, Rectangle title, Rectangle codephrase,
                         Rectangle pinButton, Rectangle reloadButton, Rectangle closeButton, Rectangle gridArea,
-                        List<Rectangle> tiles) {
+                        List<Rectangle> tiles, Rectangle legend, List<Rectangle> sections) {
         this.rows = rows;
         this.cols = cols;
         this.width = width;
@@ -54,18 +60,30 @@ final class BoardLayout {
         this.closeButton = closeButton;
         this.gridArea = gridArea;
         this.tiles = tiles;
+        this.legend = legend;
+        this.sections = sections;
     }
 
     static BoardLayout compute(int rows, int cols, int tileCount, int viewportWidth, int viewportHeight,
                                double scale, boolean hasCodephrase) {
+        return compute(rows, cols, tileCount, viewportWidth, viewportHeight, scale, hasCodephrase, false);
+    }
+
+    /**
+     * Like the plain grid, but with {@code withLegend} a {@link #LEGEND_HEIGHT} line is reserved between the
+     * header and the grid and exposed as {@link #legend}.
+     */
+    static BoardLayout compute(int rows, int cols, int tileCount, int viewportWidth, int viewportHeight,
+                               double scale, boolean hasCodephrase, boolean withLegend) {
         int effectiveCols = cols <= 0 ? DEFAULT_GRID_SIZE : cols;
         int effectiveRows = rows <= 0 ? DEFAULT_GRID_SIZE : rows;
         // Like GridLayout, grow the grid when there are more tiles than cells
         effectiveRows = Math.max(effectiveRows, (tileCount + effectiveCols - 1) / effectiveCols);
 
         int headerHeight = TITLE_HEIGHT + (hasCodephrase ? CODEPHRASE_HEIGHT : 0) + HEADER_SPACING;
+        int legendBlock = withLegend ? LEGEND_HEIGHT + LEGEND_SPACING : 0;
         int availableWidth = (int) (viewportWidth * VIEWPORT_FILL) - 2 * PAD;
-        int availableHeight = (int) (viewportHeight * VIEWPORT_FILL) - 2 * PAD - headerHeight;
+        int availableHeight = (int) (viewportHeight * VIEWPORT_FILL) - 2 * PAD - headerHeight - legendBlock;
         int fitWidth = (availableWidth - (effectiveCols - 1) * GAP) / effectiveCols;
         int fitHeight = (availableHeight - (effectiveRows - 1) * GAP) / effectiveRows;
         int preferred = (int) Math.round(TILE_DEFAULT * scale);
@@ -74,19 +92,10 @@ final class BoardLayout {
         int gridWidth = effectiveCols * tileSize + (effectiveCols - 1) * GAP;
         int gridHeight = effectiveRows * tileSize + (effectiveRows - 1) * GAP;
         int width = Math.max(MIN_WIDTH, 2 * PAD + gridWidth);
-        int height = 2 * PAD + headerHeight + gridHeight;
-
-        int buttonY = PAD + (TITLE_HEIGHT - BUTTON_SIZE) / 2;
-        Rectangle closeButton = new Rectangle(width - PAD - BUTTON_SIZE, buttonY, BUTTON_SIZE, BUTTON_SIZE);
-        Rectangle reloadButton = new Rectangle(closeButton.x - GAP - BUTTON_SIZE, buttonY, BUTTON_SIZE, BUTTON_SIZE);
-        Rectangle pinButton = new Rectangle(reloadButton.x - GAP - PIN_BUTTON_WIDTH, buttonY, PIN_BUTTON_WIDTH, BUTTON_SIZE);
-        Rectangle title = new Rectangle(PAD, PAD, Math.max(0, pinButton.x - GAP - PAD), TITLE_HEIGHT);
-        Rectangle codephrase = hasCodephrase
-                ? new Rectangle(PAD, PAD + TITLE_HEIGHT, width - 2 * PAD, CODEPHRASE_HEIGHT)
-                : null;
+        int height = 2 * PAD + headerHeight + legendBlock + gridHeight;
 
         int gridX = (width - gridWidth) / 2;
-        int gridY = PAD + headerHeight;
+        int gridY = PAD + headerHeight + legendBlock;
         Rectangle gridArea = new Rectangle(gridX, gridY, gridWidth, gridHeight);
 
         List<Rectangle> tiles = new ArrayList<>(effectiveRows * effectiveCols);
@@ -96,8 +105,44 @@ final class BoardLayout {
             tiles.add(new Rectangle(x, y, tileSize, tileSize));
         }
 
-        return new BoardLayout(effectiveRows, effectiveCols, width, height, tileSize, title, codephrase,
-                pinButton, reloadButton, closeButton, gridArea, Collections.unmodifiableList(tiles));
+        Rectangle legend = withLegend
+                ? new Rectangle(PAD, PAD + headerHeight, width - 2 * PAD, LEGEND_HEIGHT)
+                : null;
+        return withTiles(effectiveRows, effectiveCols, width, height, tileSize, hasCodephrase, gridArea, tiles,
+                legend, Collections.<Rectangle>emptyList());
+    }
+
+    /**
+     * Builds a layout from explicit tile rectangles, for boards that are not a regular grid. The header
+     * controls are placed like in {@link #compute}; {@code tiles} are in tile order and may differ in size,
+     * must not overlap, and must lie inside {@code gridArea}. The list is
+     * used as is, not copied, so callers must not modify it afterwards.
+     */
+    static BoardLayout withTiles(int rows, int cols, int width, int height, int tileSize, boolean hasCodephrase,
+                                 Rectangle gridArea, List<Rectangle> tiles) {
+        return withTiles(rows, cols, width, height, tileSize, hasCodephrase, gridArea, tiles, null,
+                Collections.<Rectangle>emptyList());
+    }
+
+    /**
+     * Like {@link #withTiles(int, int, int, int, int, boolean, Rectangle, List)}, plus an optional legend line
+     * and section header rectangles (which should lie inside {@code gridArea}) for boards split into sections.
+     */
+    static BoardLayout withTiles(int rows, int cols, int width, int height, int tileSize, boolean hasCodephrase,
+                                 Rectangle gridArea, List<Rectangle> tiles, Rectangle legend,
+                                 List<Rectangle> sections) {
+        int buttonY = PAD + (TITLE_HEIGHT - BUTTON_SIZE) / 2;
+        Rectangle closeButton = new Rectangle(width - PAD - BUTTON_SIZE, buttonY, BUTTON_SIZE, BUTTON_SIZE);
+        Rectangle reloadButton = new Rectangle(closeButton.x - GAP - BUTTON_SIZE, buttonY, BUTTON_SIZE, BUTTON_SIZE);
+        Rectangle pinButton = new Rectangle(reloadButton.x - GAP - PIN_BUTTON_WIDTH, buttonY, PIN_BUTTON_WIDTH, BUTTON_SIZE);
+        Rectangle title = new Rectangle(PAD, PAD, Math.max(0, pinButton.x - GAP - PAD), TITLE_HEIGHT);
+        Rectangle codephrase = hasCodephrase
+                ? new Rectangle(PAD, PAD + TITLE_HEIGHT, width - 2 * PAD, CODEPHRASE_HEIGHT)
+                : null;
+
+        return new BoardLayout(rows, cols, width, height, tileSize, title, codephrase,
+                pinButton, reloadButton, closeButton, gridArea, Collections.unmodifiableList(tiles), legend,
+                Collections.unmodifiableList(sections));
     }
 
     /**
@@ -108,19 +153,13 @@ final class BoardLayout {
             return -1;
         }
 
-        int step = tileSize + GAP;
-        int dx = x - gridArea.x;
-        int dy = y - gridArea.y;
-        if (dx % step >= tileSize || dy % step >= tileSize) {
-            return -1;
+        // Plain loop over the rectangles: works for any arrangement and allocates nothing
+        for (int i = 0; i < tiles.size(); i++) {
+            if (tiles.get(i).contains(x, y)) {
+                return i;
+            }
         }
-
-        int col = dx / step;
-        int row = dy / step;
-        if (col >= cols || row >= rows) {
-            return -1;
-        }
-        return row * cols + col;
+        return -1;
     }
 
     Button buttonAt(int x, int y) {

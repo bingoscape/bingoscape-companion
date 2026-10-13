@@ -4,12 +4,13 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.ImageUtil;
+import org.bingoscape.board.BoardSummary;
+import org.bingoscape.board.Glyphs;
 import org.bingoscape.models.Bingo;
+import org.bingoscape.models.BingoType;
 import org.bingoscape.models.EventData;
 import org.bingoscape.models.Role;
 import org.bingoscape.models.TeamMember;
-import org.bingoscape.models.Tile;
-import org.bingoscape.models.TileSubmissionType;
 import org.bingoscape.ui.BingoTheme;
 import org.bingoscape.ui.TileStatusStyle;
 import org.bingoscape.ui.components.CardPanel;
@@ -55,6 +56,7 @@ public class BingoScapePanel extends PluginPanel {
     private static final int GAP = 6;
     private static final int TEXT_WIDTH = PluginPanel.PANEL_WIDTH - 2 * BORDER_SPACING - 24;
     private static final int TITLE_WITH_PILL_WIDTH = TEXT_WIDTH - 70;
+    private static final int SHOT_ICON = 12;
     private static final int RELOAD_FALLBACK_MS = 10_000;
     private static final String NO_EVENTS_TEXT = "No active events found";
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy");
@@ -498,57 +500,30 @@ public class BingoScapePanel extends PluginPanel {
             boardCard.add(wrappedLabel("Codephrase: " + bingo.getCodephrase().trim(), FontManager.getRunescapeSmallFont(), BingoTheme.GOLD));
         }
 
-        int tiles = 0;
-        int completed = 0;
-        int pending = 0;
-        int needsAction = 0;
-        int declined = 0;
-        int xpTotal = 0;
-        int xpEarned = 0;
-        if (bingo.getTiles() != null) {
-            for (Tile tile : bingo.getTiles()) {
-                if (tile == null || tile.isHidden()) {
-                    continue;
-                }
-                tiles++;
-                xpTotal += tile.getWeight();
-                TileSubmissionType status = TileStatusStyle.statusOf(tile);
-                if (status == null) {
-                    continue;
-                }
-                switch (status) {
-                    case ACCEPTED:
-                        completed++;
-                        xpEarned += tile.getWeight();
-                        break;
-                    case PENDING:
-                        pending++;
-                        break;
-                    case REQUIRES_INTERACTION:
-                        needsAction++;
-                        break;
-                    case DECLINED:
-                        declined++;
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
+        BoardSummary summary = BoardSummary.of(bingo);
 
         boardCard.add(Box.createVerticalStrut(GAP));
-        addProgress(boardCard, "Completed", completed, tiles, completed + " / " + tiles);
+        boardCard.add(typeBadge(summary.type));
+
         boardCard.add(Box.createVerticalStrut(GAP));
-        addProgress(boardCard, "XP", xpEarned, xpTotal, xpEarned + " / " + xpTotal);
+        addProgress(boardCard, "Completed", summary.completed, summary.tiles, summary.completed + " / " + summary.tiles);
+        boardCard.add(Box.createVerticalStrut(GAP));
+        addProgress(boardCard, "XP", summary.xpEarned, summary.xpTotal, summary.xpEarned + " / " + summary.xpTotal);
         boardCard.add(Box.createVerticalStrut(GAP));
 
         JPanel stats = new JPanel(new GridLayout(1, 3, GAP, 0));
         stats.setOpaque(false);
         stats.setAlignmentX(Component.LEFT_ALIGNMENT);
-        stats.add(stat(pending, "Pending", TileStatusStyle.PENDING));
-        stats.add(stat(needsAction, "Action", TileStatusStyle.NEEDS_ACTION));
-        stats.add(stat(declined, "Declined", TileStatusStyle.DECLINED));
+        stats.add(stat(summary.pending, "Pending", TileStatusStyle.PENDING));
+        stats.add(stat(summary.needsAction, "Action", TileStatusStyle.NEEDS_ACTION));
+        stats.add(stat(summary.declined, "Declined", TileStatusStyle.DECLINED));
         boardCard.add(fullWidth(stats));
+
+        if (summary.type == BingoType.PROGRESSION && !summary.tiers.isEmpty()) {
+            addTiers(boardCard, summary);
+        } else if (summary.type == BingoType.BATTLESHIP) {
+            addShots(boardCard, summary);
+        }
 
         boardCard.setVisible(true);
     }
@@ -691,6 +666,78 @@ public class BingoScapePanel extends PluginPanel {
         bar.setProgress(current, target);
         container.add(Box.createVerticalStrut(2));
         container.add(bar);
+    }
+
+    private static JPanel typeBadge(BingoType type) {
+        Pill pill = new Pill();
+        switch (type) {
+            case PROGRESSION:
+                pill.setStatus("Progression", BingoTheme.GOLD);
+                break;
+            case BATTLESHIP:
+                pill.setStatus("Battleship", Glyphs.SUNK_COLOR);
+                break;
+            default:
+                pill.setStatus("Standard", BingoTheme.MUTED);
+                break;
+        }
+        JPanel holder = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        holder.setOpaque(false);
+        holder.add(pill);
+        return fullWidth(holder);
+    }
+
+    /**
+     * One row per tier: its XP towards the next tier, or what a locked tier still needs.
+     */
+    private static void addTiers(JPanel container, BoardSummary summary) {
+        container.add(Box.createVerticalStrut(GAP));
+        container.add(sectionLabel("Tiers"));
+        for (BoardSummary.Tier tier : summary.tiers) {
+            String name = "Tier " + tier.tier;
+            if (!tier.unlocked) {
+                addInfoRow(container, name, tier.xpNeeded >= 0 ? "Locked: " + tier.xpNeeded + " XP needed" : "Locked");
+                continue;
+            }
+            // The last tier has nothing to unlock, so it has no requirement and no bar
+            if (tier.requiredXp > 0) {
+                addProgress(container, name, clampInt(tier.earnedXp), clampInt(tier.requiredXp),
+                        tier.earnedXp + " / " + tier.requiredXp + " XP");
+            } else {
+                addInfoRow(container, name, tier.earnedXp + " XP");
+            }
+            container.add(Box.createVerticalStrut(2));
+        }
+    }
+
+    /**
+     * Hit, miss and sunk counts with the same glyphs as the board, then the ships remaining line.
+     */
+    private static void addShots(JPanel container, BoardSummary summary) {
+        container.add(Box.createVerticalStrut(GAP));
+        JPanel shots = new JPanel(new GridLayout(1, 3, GAP, 0));
+        shots.setOpaque(false);
+        shots.setAlignmentX(Component.LEFT_ALIGNMENT);
+        shots.add(shotStat(summary.hits, "Hit", Glyphs.HIT_COLOR, Glyphs.hit(SHOT_ICON)));
+        shots.add(shotStat(summary.misses, "Miss", Glyphs.MISS_COLOR, Glyphs.miss(SHOT_ICON)));
+        shots.add(shotStat(summary.sunk, "Sunk", Glyphs.SUNK_COLOR, Glyphs.sunk(SHOT_ICON)));
+        container.add(fullWidth(shots));
+
+        if (summary.shipsLegend != null) {
+            container.add(Box.createVerticalStrut(GAP));
+            container.add(wrappedLabel(summary.shipsLegend, FontManager.getRunescapeSmallFont(), BingoTheme.MUTED));
+        }
+    }
+
+    private static JPanel shotStat(int count, String caption, Color color, BufferedImage icon) {
+        JPanel panel = stat(count, caption, color);
+        BorderLayout layout = (BorderLayout) panel.getLayout();
+        ((JLabel) layout.getLayoutComponent(BorderLayout.SOUTH)).setIcon(new ImageIcon(icon));
+        return panel;
+    }
+
+    private static int clampInt(long value) {
+        return (int) Math.max(0, Math.min(Integer.MAX_VALUE, value));
     }
 
     private static JPanel stat(int count, String caption, Color color) {

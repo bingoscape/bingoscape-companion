@@ -8,4 +8,11 @@ public interface Notification {
     int PRIORITY_DROP = 1;
 
     int priority();
+
+    /**
+     * How long the popup stays compared to a plain drop popup.
+     */
+    default double holdFactor() {
+        return 1.0;
+    }
 }

@@ -14,31 +14,53 @@ import java.util.UUID;
 
 /**
  * Immutable snapshot of a bingo board for rendering. Tiles are a sorted copy, so the shared
- * {@link Bingo#getTiles()} list is never mutated.
+ * {@link Bingo#getTiles()} list is never mutated. {@link #views} holds the precomputed render values in the
+ * same order and must not be modified.
  */
 final class BoardModel {
     final Bingo bingo;
+    final BoardKind kind;
     final List<Tile> tiles;
     final Map<UUID, Tile> byId;
+    final TileView[] views;
+    final Map<UUID, TileView> viewById;
+    /** The kind's {@link BoardKind#prepare} result, e.g. the tier ladder; null for kinds without any. */
+    final Object data;
 
-    private BoardModel(Bingo bingo, List<Tile> tiles, Map<UUID, Tile> byId) {
+    private BoardModel(Bingo bingo, BoardKind kind, List<Tile> tiles, Map<UUID, Tile> byId, TileView[] views,
+                       Map<UUID, TileView> viewById, Object data) {
         this.bingo = bingo;
+        this.kind = kind;
         this.tiles = tiles;
         this.byId = byId;
+        this.views = views;
+        this.viewById = viewById;
+        this.data = data;
     }
 
     static BoardModel of(Bingo bingo) {
+        return of(bingo, BoardKind.forBingo(bingo));
+    }
+
+    static BoardModel of(Bingo bingo, BoardKind kind) {
         List<Tile> tiles = bingo.getTiles() == null ? new ArrayList<>() : new ArrayList<>(bingo.getTiles());
         tiles.removeIf(Objects::isNull);
         tiles.sort(Comparator.comparingInt(Tile::getIndex));
 
+        Object data = kind.prepare(bingo, tiles);
         Map<UUID, Tile> byId = new HashMap<>();
-        for (Tile tile : tiles) {
+        Map<UUID, TileView> viewById = new HashMap<>();
+        TileView[] views = new TileView[tiles.size()];
+        for (int i = 0; i < views.length; i++) {
+            Tile tile = tiles.get(i);
+            views[i] = kind.view(bingo, tile, i, data);
             if (tile.getId() != null) {
                 byId.put(tile.getId(), tile);
+                viewById.put(tile.getId(), views[i]);
             }
         }
 
-        return new BoardModel(bingo, Collections.unmodifiableList(tiles), Collections.unmodifiableMap(byId));
+        return new BoardModel(bingo, kind, Collections.unmodifiableList(tiles), Collections.unmodifiableMap(byId),
+                views, Collections.unmodifiableMap(viewById), data);
     }
 }
