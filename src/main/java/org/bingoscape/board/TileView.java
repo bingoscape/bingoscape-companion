@@ -30,8 +30,13 @@ final class TileView {
     final int tier;
     /** Why the tile is locked ("Tier 2 locked: 3 more XP needed in Tier 1"), or null when it is not locked. */
     final String lockNote;
+    /** Battleship shot result for the tile; {@link BattleshipMarks.Mark#NONE} on every other board. */
+    final BattleshipMarks.Mark mark;
+    /** Battleship board whose event has not started yet, so nothing can be submitted. */
+    final boolean notStarted;
 
-    private TileView(Tile tile, int index, boolean tierLocked, String lockNote) {
+    private TileView(Tile tile, int index, boolean tierLocked, String lockNote, BattleshipMarks.Mark mark,
+                     boolean notStarted) {
         this.tile = tile;
         this.index = index;
         this.id = tile.getId();
@@ -45,16 +50,25 @@ final class TileView {
         this.tierLocked = tierLocked;
         this.tier = tile.getTier() == null ? 0 : tile.getTier();
         this.lockNote = lockNote;
+        this.mark = mark;
+        this.notStarted = notStarted;
     }
 
     static TileView of(Tile tile, int index) {
-        return new TileView(tile, index, tile.isTierLocked(), null);
+        return new TileView(tile, index, tile.isTierLocked(), null, BattleshipMarks.Mark.NONE, false);
     }
 
     /**
      * A view whose lock state comes from the board's tier state instead of the tile flag alone.
      */
     static TileView of(Tile tile, int index, boolean tierLocked, String lockNote) {
-        return new TileView(tile, index, tierLocked, lockNote);
+        return new TileView(tile, index, tierLocked, lockNote, BattleshipMarks.Mark.NONE, false);
+    }
+
+    /**
+     * A battleship view with the tile's shot result.
+     */
+    static TileView of(Tile tile, int index, BattleshipMarks.Mark mark, boolean notStarted) {
+        return new TileView(tile, index, tile.isTierLocked(), null, mark, notStarted);
     }
 }
