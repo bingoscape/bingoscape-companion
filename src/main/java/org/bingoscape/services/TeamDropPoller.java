@@ -83,6 +83,7 @@ public class TeamDropPoller {
     private volatile ScheduledFuture<?> scheduled;
     private volatile Supplier<String> accountName = () -> null;
     private volatile Supplier<String> currentBingoId = () -> null;
+    private volatile Supplier<String> currentBattleshipBingoId = () -> null;
     private volatile Runnable boardRefresh = () -> { };
     private int failures;
 
@@ -107,6 +108,15 @@ public class TeamDropPoller {
     public void configureBoardRefresh(Supplier<String> currentBingoId, Runnable boardRefresh) {
         this.currentBingoId = currentBingoId;
         this.boardRefresh = boardRefresh;
+    }
+
+    /**
+     * Sets how the poller learns the shown bingo when it is a battleship board, or null for any other board.
+     * Completions of that bingo get no generic popup: the board diff announces every shot, and a shot that
+     * also completes a tile would otherwise show twice.
+     */
+    public void configureBattleshipBingo(Supplier<String> currentBattleshipBingoId) {
+        this.currentBattleshipBingoId = currentBattleshipBingoId;
     }
 
     /**
@@ -281,7 +291,7 @@ public class TeamDropPoller {
                 return;
             }
             try {
-                batch = applyCompletions(requestedSince, response, currentBingoId.get());
+                batch = applyCompletions(requestedSince, response, currentBingoId.get(), currentBattleshipBingoId.get());
             } catch (RuntimeException e) {
                 log.warn("Team completion response could not be applied", e);
                 batch = new CompletionBatch(List.of(), false);
@@ -398,6 +408,15 @@ public class TeamDropPoller {
      * is requested at most once per response, whatever the number of completions.
      */
     synchronized CompletionBatch applyCompletions(String requestedSince, TeamCompletionsResponse response, String bingoId) {
+        return applyCompletions(requestedSince, response, bingoId, null);
+    }
+
+    /**
+     * As above; completions of {@code battleshipBingoId} are recorded and refresh the board but get no
+     * popup, because the board diff already announces every shot on a battleship board.
+     */
+    synchronized CompletionBatch applyCompletions(String requestedSince, TeamCompletionsResponse response, String bingoId,
+                                                  String battleshipBingoId) {
         if (response.isResync()) {
             resetCompletions();
             return new CompletionBatch(List.of(), false);
@@ -418,6 +437,9 @@ public class TeamDropPoller {
             }
             if (bingoId != null && bingoId.equals(completion.getBingoId())) {
                 refresh = true;
+            }
+            if (battleshipBingoId != null && battleshipBingoId.equals(completion.getBingoId())) {
+                continue;
             }
             if (result.size() < MAX_COMPLETIONS_PER_POLL) {
                 result.add(completion);
