@@ -118,6 +118,11 @@ public interface BingoScapeConfig extends Config {
         return LockedTileDisplay.DIM;
     }
 
+    @ConfigItem(keyName = "battleshipShowMarkers", name = "Battleship Marks", description = "Show your team's hit, miss and sunk marks on battleship boards", section = boardSection, position = 8)
+    default boolean battleshipShowMarkers() {
+        return true;
+    }
+
     @ConfigSection(name = "Notifications", description = "Drop popup settings", position = 10)
     String notificationSection = "notifications";
 

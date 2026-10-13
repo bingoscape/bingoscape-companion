@@ -26,6 +26,9 @@ interface BoardKind {
         if (type == BingoType.PROGRESSION) {
             return ProgressionKind.SHOW_LOCKED;
         }
+        if (type == BingoType.BATTLESHIP) {
+            return BattleshipKind.SHOW_MARKERS;
+        }
         return StandardKind.INSTANCE;
     }
 
