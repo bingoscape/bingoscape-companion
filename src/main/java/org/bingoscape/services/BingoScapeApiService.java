@@ -18,11 +18,13 @@ import java.util.function.Consumer;
 @Singleton
 public class BingoScapeApiService {
     private static final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/png");
+    private static final int HTTP_NOT_MODIFIED = 304;
     private static final MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json");
 
     private final OkHttpClient httpClient;
     private final Gson gson;
     private final BingoScapeConfig config;
+    private final BoardEtags boardEtags = new BoardEtags();
 
     @Inject
     public BingoScapeApiService(OkHttpClient httpClient, Gson gson, BingoScapeConfig config) {
@@ -148,17 +150,39 @@ public class BingoScapeApiService {
         }
     }
 
+    /**
+     * Loads a bingo unconditionally.
+     */
     public void refreshBingoBoard(UUID bingoId, Consumer<Bingo> onSuccess, Consumer<ApiError> onError) {
+        refreshBingoBoard(bingoId, null, "", onSuccess, null, onError);
+    }
+
+    /**
+     * Reloads a bingo, asking the server whether it changed since {@code current} was received. A 304 calls
+     * {@code onNotModified} (when not null) and nothing else, so the caller keeps its copy and runs no diff.
+     * The board endpoint is rate limited to 60 requests a minute per user, which 304s count against too.
+     *
+     * @param current   the copy the caller holds; the ETag is only sent if it came from the previous response
+     * @param teamScope identifies the team the board is viewed as; another team never reuses an ETag
+     */
+    public void refreshBingoBoard(UUID bingoId, Bingo current, String teamScope, Consumer<Bingo> onSuccess,
+                                  Runnable onNotModified, Consumer<ApiError> onError) {
         if (!hasApiKey()) {
             onError.accept(new ApiError(ApiError.NO_RESPONSE, "No API key configured"));
             return;
         }
 
+        String scope = BoardEtags.scopeOf(config.apiBaseUrl(), config.apiKey(), teamScope);
+        String etag = boardEtags.etagFor(bingoId, scope, current);
+
         String apiUrl = config.apiBaseUrl() + "/api/runelite/bingos/" + bingoId;
-        Request request = new Request.Builder()
+        Request.Builder builder = new Request.Builder()
                 .url(apiUrl)
-                .header("Authorization", "Bearer " + config.apiKey())
-                .build();
+                .header("Authorization", "Bearer " + config.apiKey());
+        if (etag != null) {
+            builder.header("If-None-Match", etag);
+        }
+        Request request = builder.build();
 
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
@@ -170,15 +194,22 @@ public class BingoScapeApiService {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
+                    if (response.code() == HTTP_NOT_MODIFIED && etag != null) {
+                        if (onNotModified != null) {
+                            onNotModified.run();
+                        }
+                        return;
+                    }
                     if (!response.isSuccessful() || responseBody == null) {
                         String error = "Unsuccessful response when refreshing bingo: " + response;
                         log.error(error);
-                        onError.accept(new ApiError(response.code(), error));
+                        onError.accept(new ApiError(response.code(), error, parseRetryAfter(response.header("Retry-After"))));
                         return;
                     }
 
                     String jsonData = responseBody.string();
                     Bingo updatedBingo = gson.fromJson(jsonData, Bingo.class);
+                    boardEtags.store(bingoId, scope, response.header("ETag"), updatedBingo);
                     onSuccess.accept(updatedBingo);
                 }
             }

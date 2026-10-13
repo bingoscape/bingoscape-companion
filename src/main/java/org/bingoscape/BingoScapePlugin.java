@@ -611,8 +611,16 @@ public class BingoScapePlugin extends Plugin {
         String requestScope = teamScope(currentEvent);
         apiService.refreshBingoBoard(
             currentBingo.getId(),
+            currentBingo,
+            requestScope,
             bingo -> {
                 updateCurrentBingoAndPanel(bingo, requestScope);
+                if (onDone != null) {
+                    onDone.run();
+                }
+            },
+            // 304: the board is unchanged, so keep it and announce nothing
+            () -> {
                 if (onDone != null) {
                     onDone.run();
                 }
