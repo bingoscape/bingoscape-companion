@@ -9,6 +9,7 @@ import lombok.Getter;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.SoundEffectID;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -27,9 +28,12 @@ import net.runelite.client.input.KeyManager;
 import net.runelite.client.input.MouseManager;
 import net.runelite.client.util.HotkeyListener;
 import org.bingoscape.board.BingoBoardOverlay;
+import org.bingoscape.board.BoardDiff;
 import org.bingoscape.board.BoardInputListener;
 import org.bingoscape.board.BoardState;
 import org.bingoscape.board.ScreenshotPreviewDialog;
+import org.bingoscape.notifications.BoardNotifications;
+import org.bingoscape.notifications.Notification;
 import org.bingoscape.services.BingoScapeApiService;
 import org.bingoscape.services.TileImageCache;
 
@@ -167,6 +171,9 @@ public class BingoScapePlugin extends Plugin {
     private boolean isLoggedIn;
     // Event, bingo and team the team drop feed is baselined for
     private volatile String teamDropScope = "";
+    // Event and team the shown bingo was last loaded for; a board of another team is never diffed against it
+    private volatile String boardScope = "";
+    private final Object boardSwapLock = new Object();
 
     @Override
     protected void startUp() {
@@ -194,6 +201,11 @@ public class BingoScapePlugin extends Plugin {
         teamDropPoller.configureBoardRefresh(
                 () -> currentBingo == null || currentBingo.getId() == null ? null : currentBingo.getId().toString(),
                 this::refreshBingoBoard);
+        teamDropPoller.configureBattleshipBingo(() -> {
+            Bingo bingo = currentBingo;
+            return bingo != null && bingo.getId() != null && bingo.getBingoType() == BingoType.BATTLESHIP
+                    ? bingo.getId().toString() : null;
+        });
         updateTeamDropPolling(false);
 
         // Load all events and handle pinned bingo
@@ -415,11 +427,17 @@ public class BingoScapePlugin extends Plugin {
         }
     }
 
+    /**
+     * Event and team a board belongs to; the same board of another team must not be diffed.
+     */
+    private static String teamScope(EventData event) {
+        return event == null ? "" : event.getId() + "/" + (event.getUserTeam() == null ? "" : event.getUserTeam().getName());
+    }
+
     private void rebaselineTeamDropsIfScopeChanged() {
         EventData event = currentEvent;
         Bingo bingo = currentBingo;
-        String scope = (event == null ? "" : event.getId() + "/" + (event.getUserTeam() == null ? "" : event.getUserTeam().getName()))
-                + "|" + (bingo == null ? "" : bingo.getId());
+        String scope = teamScope(event) + "|" + (bingo == null ? "" : bingo.getId());
         if (!scope.equals(teamDropScope)) {
             teamDropScope = scope;
             teamDropPoller.rebaseline();
@@ -454,7 +472,10 @@ public class BingoScapePlugin extends Plugin {
     }
 
     public void selectBingo(Bingo bingo) {
-        currentBingo = bingo;
+        synchronized (boardSwapLock) {
+            boardScope = teamScope(currentEvent);
+            currentBingo = bingo;
+        }
         panel.displayBingoBoard(currentBingo);
         rebaselineTeamDropsIfScopeChanged();
 
@@ -587,10 +608,11 @@ public class BingoScapePlugin extends Plugin {
             return;
         }
 
+        String requestScope = teamScope(currentEvent);
         apiService.refreshBingoBoard(
             currentBingo.getId(),
             bingo -> {
-                updateCurrentBingoAndPanel(bingo);
+                updateCurrentBingoAndPanel(bingo, requestScope);
                 if (onDone != null) {
                     onDone.run();
                 }
@@ -657,18 +679,66 @@ public class BingoScapePlugin extends Plugin {
     }
 
     private void updateCurrentBingoAndPanel(Bingo updatedBingo) {
+        updateCurrentBingoAndPanel(updatedBingo, teamScope(currentEvent));
+    }
+
+    /**
+     * Swaps in a freshly loaded bingo and announces what changed compared to the previous copy. Nothing is
+     * announced for the first load, another bingo, or when the team changed since the previous copy or the
+     * request ({@code requestScope}).
+     */
+    private void updateCurrentBingoAndPanel(Bingo updatedBingo, String requestScope) {
+        List<BoardDiff.Event> changes;
+        synchronized (boardSwapLock) {
+            String scope = teamScope(currentEvent);
+            // A response of a request made under another team than the current one is not comparable either
+            changes = BoardDiff.compute(currentBingo, boardScope, updatedBingo, scope.equals(requestScope) ? scope : null);
+            boardScope = scope;
+            currentBingo = updatedBingo;
+        }
         for(EventData e : activeEvents) {
             // Swap in a new list instead of mutating: the panel iterates these lists on the EDT
             List<Bingo> bingos = new ArrayList<>(e.getBingos());
             bingos.replaceAll(b -> b.getId().equals(updatedBingo.getId()) ? updatedBingo : b);
             e.setBingos(bingos);
         }
-        currentBingo = updatedBingo;
         panel.displayBingoBoard(updatedBingo);
 
         // Rebuild requirement matcher lookup maps after bingo changes
         // The matcher will query currentBingo directly from the plugin
         requirementMatcher.rebuildLookupMaps();
+
+        showBoardChanges(changes, updatedBingo.getTitle());
+    }
+
+    /**
+     * Queues the popups for tier unlocks and battleship shots. The diff ignores the marker setting, so a
+     * hidden mark is still announced; each popup type has its own switch.
+     */
+    private void showBoardChanges(List<BoardDiff.Event> changes, String bingoTitle) {
+        if (changes.isEmpty()) {
+            return;
+        }
+        clientThread.invoke(() -> {
+            if (!config.showToastNotifications()) {
+                return;
+            }
+            boolean shot = false;
+            for (BoardDiff.Event change : changes) {
+                boolean tier = change instanceof BoardDiff.TierUnlocked;
+                if (tier ? !config.showTierUnlockNotifications() : !config.showBattleshipNotifications()) {
+                    continue;
+                }
+                Notification popup = BoardNotifications.toNotification(change, bingoTitle);
+                if (popup != null) {
+                    dropOverlay.enqueue(popup);
+                    shot |= !tier;
+                }
+            }
+            if (shot && config.battleshipSound()) {
+                client.playSoundEffect(SoundEffectID.UI_BOOP);
+            }
+        });
     }
 
     private void showErrorMessage(String message) {

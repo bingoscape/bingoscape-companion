@@ -184,4 +184,19 @@ public interface BingoScapeConfig extends Config {
     default boolean tileCompletedSound() {
         return true;
     }
+
+    @ConfigItem(keyName = "showTierUnlockNotifications", name = "Show Tier Unlocks", description = "Show a popup when your team unlocks a tier on a progression board. Requires the drop popup to be enabled", section = notificationSection, position = 11)
+    default boolean showTierUnlockNotifications() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "showBattleshipNotifications", name = "Show Battleship Shots", description = "Show a popup for each hit, miss and sunk ship of your team on a battleship board. Requires the drop popup to be enabled", section = notificationSection, position = 12)
+    default boolean showBattleshipNotifications() {
+        return true;
+    }
+
+    @ConfigItem(keyName = "battleshipSound", name = "Battleship Sound", description = "Play a sound when your team's shot on a battleship board hits, misses or sinks a ship", section = notificationSection, position = 13)
+    default boolean battleshipSound() {
+        return false;
+    }
 }
