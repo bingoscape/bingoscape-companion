@@ -76,16 +76,15 @@ before then. Afterwards your team's shots are drawn on the tiles:
 - Sunk: a ship in a ring
 
 The board shows "Ships remaining: X/Y" for the opponents' fleet, and the side panel counts your hits, misses and
-sunk ships. Opponent ship positions are never sent to the plugin. When a shot lands, a popup says which tile and
-what the result was. If a tile is both sunk and hit, sunk wins; a hit wins over a miss.
+sunk ships. Opponent ship positions are never sent to the plugin. When a shot lands, a popup shows the tile, the
+result and how many ships remain. If a tile is both sunk and hit, sunk wins; a hit wins over a miss.
 
 Popups for tier unlocks and shots only appear when a board refresh shows something new. Nothing is announced
 when a board is first loaded, when you switch boards or teams, or for results that were already there.
 
 ### Board Refresh
 
-The plugin reloads the board when a team tile completion comes in, when you press Reload, and after a
-submission. A reload sends the last `ETag` back, so an unchanged board costs the server a `304` and the plugin
+The plugin reloads the board when a team tile completion comes in and when you press Reload. A reload sends the last `ETag` back, so an unchanged board costs the server a `304` and the plugin
 keeps what it has. The board endpoint allows 60 requests a minute per user.
 
 ## Configuration Options
