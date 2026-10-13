@@ -1,8 +1,10 @@
 package org.bingoscape.notifications;
 
+import org.bingoscape.board.BoardDiff;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -125,5 +127,102 @@ public class DropNotificationOverlayTest {
     public void completionsHoldOneAndAHalfTimesLonger() {
         assertEquals(7500, DropNotificationOverlay.holdFor(done("c"), HOLD));
         assertEquals(HOLD, DropNotificationOverlay.holdFor(drop("d"), HOLD));
+    }
+
+    private static TierUnlockedNotification tier(int tier) {
+        return new TierUnlockedNotification(tier, "Board");
+    }
+
+    private static ShipResultNotification shot(BoardDiff.Result result, int remaining) {
+        return new ShipResultNotification("Zulrah", result, remaining);
+    }
+
+    @Test
+    public void newTypesAreCompletionPriority() {
+        assertEquals(Notification.PRIORITY_COMPLETION, tier(1).priority());
+        for (BoardDiff.Result result : BoardDiff.Result.values()) {
+            assertEquals(Notification.PRIORITY_COMPLETION, shot(result, 1).priority());
+        }
+    }
+
+    @Test
+    public void newTypesHoldLongerThanDrops() {
+        assertEquals(7500, DropNotificationOverlay.holdFor(tier(1), HOLD));
+        assertEquals(7500, DropNotificationOverlay.holdFor(shot(BoardDiff.Result.SUNK, 0), HOLD));
+        assertEquals(HOLD, DropNotificationOverlay.holdFor(shot(BoardDiff.Result.MISS, 2), HOLD));
+        assertTrue(DropNotificationOverlay.holdFor(shot(BoardDiff.Result.HIT, 2), HOLD) >= HOLD);
+    }
+
+    @Test
+    public void newTypesQueueWithCompletionsInFifoOrderBeforeDrops() {
+        DropNotificationOverlay overlay = overlay();
+        overlay.enqueue(drop("d1"));
+        overlay.enqueue(tier(2));
+        overlay.enqueue(done("c1"));
+        overlay.enqueue(shot(BoardDiff.Result.HIT, 2));
+        overlay.enqueue(drop("d2"));
+
+        assertEquals(2, ((TierUnlockedNotification) overlay.pollNext()).getTier());
+        assertEquals("c1", ((TileCompletedNotification) overlay.pollNext()).getTileTitle());
+        assertEquals(BoardDiff.Result.HIT, ((ShipResultNotification) overlay.pollNext()).getResult());
+        assertEquals("d1", ((DropNotification) overlay.pollNext()).getItemName());
+        assertEquals("d2", ((DropNotification) overlay.pollNext()).getItemName());
+        assertNull(overlay.pollNext());
+    }
+
+    @Test
+    public void newTypesEvictDropsWhenTheQueueIsFull() {
+        DropNotificationOverlay overlay = overlay();
+        for (int i = 0; i < 10; i++) {
+            overlay.enqueue(drop("d" + i));
+        }
+        overlay.enqueue(shot(BoardDiff.Result.SUNK, 1));
+
+        assertEquals(10, overlay.queueSize());
+        assertEquals(BoardDiff.Result.SUNK, ((ShipResultNotification) overlay.pollNext()).getResult());
+        assertEquals("d1", ((DropNotification) overlay.pollNext()).getItemName());
+    }
+
+    @Test
+    public void bannersCarryTheTextsOfEachType() {
+        DropNotificationOverlay.Banner completed = DropNotificationOverlay.bannerOf(done("Zulrah"));
+        assertEquals("Tile Completed", completed.caption);
+        assertEquals("Zulrah", completed.title);
+        assertEquals("+5 pts", completed.stat);
+        assertEquals("Team", completed.detail);
+
+        DropNotificationOverlay.Banner unlocked = DropNotificationOverlay.bannerOf(tier(2));
+        assertEquals("Tier Unlocked", unlocked.caption);
+        assertEquals("Tier 2", unlocked.title);
+        assertEquals("Board", unlocked.detail);
+
+        assertEquals("Direct Hit", DropNotificationOverlay.bannerOf(shot(BoardDiff.Result.HIT, -1)).caption);
+        assertEquals("Miss", DropNotificationOverlay.bannerOf(shot(BoardDiff.Result.MISS, -1)).caption);
+        DropNotificationOverlay.Banner sunk = DropNotificationOverlay.bannerOf(shot(BoardDiff.Result.SUNK, 2));
+        assertEquals("Ship Sunk", sunk.caption);
+        assertEquals("Zulrah", sunk.title);
+        assertEquals("Ships remaining: 2", sunk.stat);
+        assertEquals("All ships sunk", DropNotificationOverlay.bannerOf(shot(BoardDiff.Result.SUNK, 0)).stat);
+        assertEquals("", DropNotificationOverlay.bannerOf(shot(BoardDiff.Result.HIT, -1)).stat);
+    }
+
+    @Test
+    public void boardEventsBecomeNotifications() {
+        Notification unlocked = BoardNotifications.toNotification(new BoardDiff.TierUnlocked(3), "Board");
+        assertEquals(3, ((TierUnlockedNotification) unlocked).getTier());
+        assertEquals("Board", ((TierUnlockedNotification) unlocked).getBingoTitle());
+
+        ShipResultNotification sunk = (ShipResultNotification) BoardNotifications.toNotification(
+                new BoardDiff.ShipResult(java.util.UUID.randomUUID(), "Vorkath", BoardDiff.Result.SUNK, 1), "Board");
+        assertNotNull(sunk);
+        assertEquals("Vorkath", sunk.getTileTitle());
+        assertEquals(BoardDiff.Result.SUNK, sunk.getResult());
+        assertEquals(1, sunk.getShipsRemaining());
+
+        ShipResultNotification untitled = (ShipResultNotification) BoardNotifications.toNotification(
+                new BoardDiff.ShipResult(java.util.UUID.randomUUID(), null, BoardDiff.Result.MISS, -1), null);
+        assertEquals("Tile", untitled.getTileTitle());
+
+        assertNull(BoardNotifications.toNotification(new BoardDiff.Event() { }, "Board"));
     }
 }

@@ -7,6 +7,7 @@ import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import org.bingoscape.BingoScapeConfig;
+import org.bingoscape.board.Glyphs;
 import org.bingoscape.ui.BingoTheme;
 
 import javax.inject.Inject;
@@ -22,11 +23,14 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Drop popup at the top center of the game view. Colored by the value tier of the drop, slides in,
- * holds, fades out; further popups wait in a queue. Tile completions are shown before drops and are
- * held longer; the running popup is never interrupted.
+ * holds, fades out; further popups wait in a queue. Tile completions, tier unlocks and battleship shots are
+ * shown before drops and are held longer; the running popup is never interrupted. Each popup type has its
+ * own painter.
  */
 @Singleton
 public class DropNotificationOverlay extends Overlay {
@@ -34,9 +38,9 @@ public class DropNotificationOverlay extends Overlay {
     static final long FADE_MS = 400;
     private static final int MAX_QUEUE = 10;
     private static final double QUEUED_HOLD_FACTOR = 0.6;
-    private static final double COMPLETION_HOLD_FACTOR = 1.5;
     private static final Color GOLD = new Color(255, 196, 0);
     private static final Color GREEN = new Color(80, 200, 100);
+    private static final Color TIER = new Color(168, 85, 247);
 
     private static final int BASE_WIDTH = 300;
     private static final int PADDING = 8;
@@ -47,6 +51,8 @@ public class DropNotificationOverlay extends Overlay {
 
     private final BingoScapeConfig config;
     private final ItemManager itemManager;
+    // Painter per popup type, filled once
+    private final Map<Class<? extends Notification>, Painter> painters = new HashMap<>();
     // Guarded by itself; one FIFO per priority, completions first
     private final Deque<Notification> completionQueue = new ArrayDeque<>();
     private final Deque<Notification> dropQueue = new ArrayDeque<>();
@@ -74,6 +80,43 @@ public class DropNotificationOverlay extends Overlay {
         setLayer(OverlayLayer.ABOVE_WIDGETS);
         setPriority(PRIORITY_HIGH);
         setMovable(false);
+
+        painters.put(DropNotification.class, new DropPainter());
+        BannerPainter banner = new BannerPainter();
+        painters.put(TileCompletedNotification.class, banner);
+        painters.put(TierUnlockedNotification.class, banner);
+        painters.put(ShipResultNotification.class, banner);
+    }
+
+    /**
+     * Draws one kind of popup into the card area; picked per notification type.
+     */
+    private interface Painter {
+        void paint(Graphics2D g, Notification notification, int width, Layout layout, double scale, int pad);
+
+        /** Whether the popup has an extra warning row under the content. */
+        default boolean hasWarning(Notification notification) {
+            return false;
+        }
+    }
+
+    private final class DropPainter implements Painter {
+        @Override
+        public void paint(Graphics2D g, Notification notification, int width, Layout layout, double scale, int pad) {
+            paintCard(g, (DropNotification) notification, width, layout, scale, pad);
+        }
+
+        @Override
+        public boolean hasWarning(Notification notification) {
+            return ((DropNotification) notification).getWarning() != null;
+        }
+    }
+
+    private final class BannerPainter implements Painter {
+        @Override
+        public void paint(Graphics2D g, Notification notification, int width, Layout layout, double scale, int pad) {
+            paintBanner(g, bannerOf(notification), width, layout, scale, pad);
+        }
     }
 
     /**
@@ -122,11 +165,17 @@ public class DropNotificationOverlay extends Overlay {
                 startedAt = now;
                 // Decided once per popup so the fade timing cannot jump when more drops arrive;
                 // completions always get their full time
-                hurry = current instanceof DropNotification && queueSize() > 0;
+                hurry = current.priority() == Notification.PRIORITY_DROP && queueSize() > 0;
                 resetFittedText();
             }
         }
         if (current == null) {
+            return null;
+        }
+        Painter painter = painters.get(current.getClass());
+        if (painter == null) {
+            // A popup type without a painter cannot be shown
+            current = null;
             return null;
         }
 
@@ -135,8 +184,7 @@ public class DropNotificationOverlay extends Overlay {
         int pad = (int) Math.round(PADDING * scale);
         FontMetrics small = graphics.getFontMetrics(regular);
         FontMetrics big = graphics.getFontMetrics(bold);
-        Layout layout = Layout.of(small.getHeight(), big.getHeight(), pad,
-                current instanceof DropNotification && ((DropNotification) current).getWarning() != null);
+        Layout layout = Layout.of(small.getHeight(), big.getHeight(), pad, painter.hasWarning(current));
         int width = (int) Math.round(BASE_WIDTH * scale);
 
         long elapsed = now - startedAt;
@@ -151,11 +199,7 @@ public class DropNotificationOverlay extends Overlay {
             g.clipRect(0, 0, width, layout.height);
             g.translate(0, slideOffset);
             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-            if (current instanceof TileCompletedNotification) {
-                paintCompletion(g, (TileCompletedNotification) current, width, layout, scale, pad);
-            } else {
-                paintCard(g, (DropNotification) current, width, layout, scale, pad);
-            }
+            painter.paint(g, current, width, layout, scale, pad);
         } finally {
             g.dispose();
         }
@@ -283,34 +327,98 @@ public class DropNotificationOverlay extends Overlay {
         }
     }
 
-    private void paintCompletion(Graphics2D g, TileCompletedNotification done, int width, Layout layout, double scale, int pad) {
+    /**
+     * Texts, colors and icon of a banner style popup (completion, tier unlock, battleship shot).
+     */
+    static final class Banner {
+        enum Icon {
+            CHECK, TIER, HIT, MISS, SUNK
+        }
+
+        final Icon icon;
+        /** Border color. */
+        final Color border;
+        /** Tint of the card and the icon square. */
+        final Color tint;
+        final Color captionColor;
+        final Color titleColor;
+        final String caption;
+        final String title;
+        /** Left text of the bottom row; empty for none. */
+        final String stat;
+        /** Right text of the bottom row; null for none. */
+        final String detail;
+
+        Banner(Icon icon, Color border, Color tint, Color captionColor, Color titleColor,
+               String caption, String title, String stat, String detail) {
+            this.icon = icon;
+            this.border = border;
+            this.tint = tint;
+            this.captionColor = captionColor;
+            this.titleColor = titleColor;
+            this.caption = caption;
+            this.title = title;
+            this.stat = stat;
+            this.detail = detail;
+        }
+    }
+
+    /**
+     * The banner for a completion, tier unlock or battleship shot.
+     */
+    static Banner bannerOf(Notification notification) {
+        if (notification instanceof TileCompletedNotification) {
+            TileCompletedNotification done = (TileCompletedNotification) notification;
+            String team = done.getTeamName() == null || done.getTeamName().trim().isEmpty() ? null : done.getTeamName().trim();
+            return new Banner(Banner.Icon.CHECK, GOLD, GREEN, GREEN, GOLD, "Tile Completed", done.getTileTitle(),
+                    done.getPoints() > 0 ? "+" + done.getPoints() + " pts" : "", team);
+        }
+        if (notification instanceof TierUnlockedNotification) {
+            TierUnlockedNotification unlocked = (TierUnlockedNotification) notification;
+            String bingo = unlocked.getBingoTitle() == null || unlocked.getBingoTitle().trim().isEmpty() ? null : unlocked.getBingoTitle().trim();
+            return new Banner(Banner.Icon.TIER, TIER, TIER, TIER, GOLD, "Tier Unlocked", "Tier " + unlocked.getTier(),
+                    "New tiles open", bingo);
+        }
+        ShipResultNotification shot = (ShipResultNotification) notification;
+        String remaining = shot.getShipsRemaining() < 0 ? ""
+                : shot.getShipsRemaining() == 0 ? "All ships sunk" : "Ships remaining: " + shot.getShipsRemaining();
+        switch (shot.getResult()) {
+            case SUNK:
+                return new Banner(Banner.Icon.SUNK, Glyphs.SUNK_COLOR, Glyphs.SUNK_COLOR, Glyphs.SUNK_COLOR, Color.WHITE,
+                        "Ship Sunk", shot.getTileTitle(), remaining, null);
+            case HIT:
+                return new Banner(Banner.Icon.HIT, Glyphs.HIT_COLOR, Glyphs.HIT_COLOR, Glyphs.HIT_COLOR, Color.WHITE,
+                        "Direct Hit", shot.getTileTitle(), remaining, null);
+            default:
+                return new Banner(Banner.Icon.MISS, Glyphs.MISS_COLOR, Glyphs.MISS_COLOR, Glyphs.MISS_COLOR, Color.WHITE,
+                        "Miss", shot.getTileTitle(), remaining, null);
+        }
+    }
+
+    private void paintBanner(Graphics2D g, Banner banner, int width, Layout layout, double scale, int pad) {
         int arc = (int) Math.round(RADIUS * scale);
         int height = layout.height;
 
         g.setColor(ColorScheme.DARKER_GRAY_COLOR);
         g.fillRoundRect(0, 0, width, height, arc, arc);
-        g.setColor(BingoTheme.withAlpha(GREEN, 30));
+        g.setColor(BingoTheme.withAlpha(banner.tint, 30));
         g.fillRoundRect(0, 0, width, height, arc, arc);
         g.setStroke(new BasicStroke(3f));
-        g.setColor(BingoTheme.withAlpha(GOLD, 60));
+        g.setColor(BingoTheme.withAlpha(banner.border, 60));
         g.drawRoundRect(1, 1, width - 3, height - 3, arc, arc);
         g.setStroke(new BasicStroke(1.5f));
-        g.setColor(GOLD);
+        g.setColor(banner.border);
         g.drawRoundRect(1, 1, width - 3, height - 3, arc, arc);
 
-        // Checkmark on a tinted square, centered in the content area
+        // Icon on a tinted square, centered in the content area
         int box = (int) Math.round(ICON_BOX * scale);
         int boxY = Math.max(pad, (layout.contentBottom - box) / 2);
-        g.setColor(BingoTheme.withAlpha(GREEN, 50));
+        g.setColor(BingoTheme.withAlpha(banner.tint, 50));
         g.fillRoundRect(pad, boxY, box, box, arc, arc);
-        g.setColor(BingoTheme.withAlpha(GREEN, 140));
+        g.setColor(BingoTheme.withAlpha(banner.tint, 140));
         g.setStroke(new BasicStroke(1f));
         g.drawRoundRect(pad, boxY, box - 1, box - 1, arc, arc);
-        g.setStroke(new BasicStroke(Math.max(2f, (float) (3 * scale)), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        g.setColor(GREEN);
-        int[] xs = {pad + box * 22 / 100, pad + box * 43 / 100, pad + box * 78 / 100};
-        int[] ys = {boxY + box * 53 / 100, boxY + box * 72 / 100, boxY + box * 30 / 100};
-        g.drawPolyline(xs, ys, 3);
+        paintBannerIcon(g, banner, pad, boxY, box, scale);
 
         int textX = pad + box + pad;
         int textRight = width - pad;
@@ -325,27 +433,58 @@ public class DropNotificationOverlay extends Overlay {
             shadowed(g, more, textRight - small.stringWidth(more), layout.captionY + small.getAscent(), BingoTheme.MUTED);
         }
         if (fittedCaption == null) {
-            fittedCaption = ellipsize("Tile Completed", small, captionRight - textX);
+            fittedCaption = ellipsize(banner.caption, small, captionRight - textX);
         }
-        shadowed(g, fittedCaption, textX, layout.captionY + small.getAscent(), GREEN);
+        shadowed(g, fittedCaption, textX, layout.captionY + small.getAscent(), banner.captionColor);
 
         g.setFont(bold);
         FontMetrics big = g.getFontMetrics();
         if (fittedName == null) {
-            fittedName = ellipsize(done.getTileTitle(), big, textRight - textX);
+            fittedName = ellipsize(banner.title, big, textRight - textX);
         }
-        shadowed(g, fittedName, textX, layout.nameY + big.getAscent(), GOLD);
+        shadowed(g, fittedName, textX, layout.nameY + big.getAscent(), banner.titleColor);
 
         g.setFont(regular);
         if (valueText == null) {
-            valueText = done.getPoints() > 0 ? "+" + done.getPoints() + " pts" : "";
-            if (done.getTeamName() != null && !done.getTeamName().trim().isEmpty()) {
-                fittedTile = ellipsize(done.getTeamName().trim(), small, textRight - (textX + small.stringWidth(valueText) + pad));
+            valueText = banner.stat;
+            if (banner.detail != null) {
+                fittedTile = ellipsize(banner.detail, small, textRight - (textX + small.stringWidth(valueText) + pad));
             }
         }
         shadowed(g, valueText, textX, layout.statY + small.getAscent(), Color.WHITE);
         if (fittedTile != null) {
             shadowed(g, fittedTile, textRight - small.stringWidth(fittedTile), layout.statY + small.getAscent(), BingoTheme.MUTED);
+        }
+    }
+
+    private void paintBannerIcon(Graphics2D g, Banner banner, int x, int y, int box, double scale) {
+        switch (banner.icon) {
+            case CHECK: {
+                g.setStroke(new BasicStroke(Math.max(2f, (float) (3 * scale)), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g.setColor(banner.tint);
+                int[] xs = {x + box * 22 / 100, x + box * 43 / 100, x + box * 78 / 100};
+                int[] ys = {y + box * 53 / 100, y + box * 72 / 100, y + box * 30 / 100};
+                g.drawPolyline(xs, ys, 3);
+                break;
+            }
+            case TIER: {
+                // Arrow pointing up: the next tier is open
+                g.setStroke(new BasicStroke(Math.max(2f, (float) (3 * scale)), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g.setColor(GOLD);
+                int mid = x + box / 2;
+                g.drawLine(mid, y + box * 78 / 100, mid, y + box * 24 / 100);
+                int[] xs = {x + box * 28 / 100, mid, x + box * 72 / 100};
+                int[] ys = {y + box * 44 / 100, y + box * 22 / 100, y + box * 44 / 100};
+                g.drawPolyline(xs, ys, 3);
+                break;
+            }
+            default: {
+                int glyph = Math.max(1, box - 4);
+                BufferedImage image = banner.icon == Banner.Icon.HIT ? Glyphs.hit(glyph)
+                        : banner.icon == Banner.Icon.MISS ? Glyphs.miss(glyph) : Glyphs.sunk(glyph);
+                g.drawImage(image, x + (box - image.getWidth()) / 2, y + (box - image.getHeight()) / 2, null);
+                break;
+            }
         }
     }
 
@@ -408,10 +547,11 @@ public class DropNotificationOverlay extends Overlay {
     }
 
     /**
-     * Hold time of a popup: completions stay 1.5 times as long as drops.
+     * Hold time of a popup: the base time scaled by the factor of the popup type, so completions stay
+     * longer than drops.
      */
     static long holdFor(Notification notification, long baseMs) {
-        return notification instanceof TileCompletedNotification ? Math.round(baseMs * COMPLETION_HOLD_FACTOR) : baseMs;
+        return Math.round(baseMs * notification.holdFactor());
     }
 
     private static void shadowed(Graphics2D g, String text, int x, int baseline, Color color) {

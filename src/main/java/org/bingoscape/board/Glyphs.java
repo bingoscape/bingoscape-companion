@@ -16,13 +16,13 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 /**
  * Small icons drawn once with Java2D and cached per size, so the render loop only blits them.
  */
-final class Glyphs {
+public final class Glyphs {
     private static final Color LOCK_BODY = new Color(156, 163, 175);
     private static final Color LOCK_KEYHOLE = new Color(31, 41, 55);
 
-    static final Color HIT_COLOR = new Color(239, 68, 68);
-    static final Color MISS_COLOR = new Color(203, 213, 225);
-    static final Color SUNK_COLOR = new Color(56, 189, 248);
+    public static final Color HIT_COLOR = new Color(239, 68, 68);
+    public static final Color MISS_COLOR = new Color(203, 213, 225);
+    public static final Color SUNK_COLOR = new Color(56, 189, 248);
     private static final Color SHIP_COLOR = new Color(241, 245, 249);
     private static final Color OUTLINE = new Color(0, 0, 0, 170);
 
@@ -53,21 +53,21 @@ final class Glyphs {
     /**
      * A bold red X, the battleship "hit" mark. Shared; must not be modified.
      */
-    static BufferedImage hit(int size) {
+    public static BufferedImage hit(int size) {
         return cached(HIT, size, Glyphs::drawHit);
     }
 
     /**
      * A hollow dot, the battleship "miss" mark. Shared; must not be modified.
      */
-    static BufferedImage miss(int size) {
+    public static BufferedImage miss(int size) {
         return cached(MISS, size, Glyphs::drawMiss);
     }
 
     /**
      * A ship inside a ring, the battleship "sunk" mark. Shared; must not be modified.
      */
-    static BufferedImage sunk(int size) {
+    public static BufferedImage sunk(int size) {
         return cached(SUNK, size, Glyphs::drawSunk);
     }
 

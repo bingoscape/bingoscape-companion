@@ -15,4 +15,9 @@ public class TileCompletedNotification implements Notification {
     public int priority() {
         return PRIORITY_COMPLETION;
     }
+
+    @Override
+    public double holdFactor() {
+        return 1.5;
+    }
 }
